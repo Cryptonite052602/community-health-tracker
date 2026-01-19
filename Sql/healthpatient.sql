@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1
--- Generation Time: Jan 15, 2026 at 03:07 AM
+-- Generation Time: Jan 20, 2026 at 12:25 AM
 -- Server version: 10.4.32-MariaDB
 -- PHP Version: 8.2.12
 
@@ -101,23 +101,6 @@ INSERT INTO `audit_logs` (`id`, `user_id`, `user_type`, `action`, `table_affecte
 -- --------------------------------------------------------
 
 --
--- Table structure for table `chat_sessions`
---
-
-CREATE TABLE `chat_sessions` (
-  `id` int(11) NOT NULL,
-  `staff_id` int(11) NOT NULL,
-  `user_id` int(11) NOT NULL,
-  `subject` varchar(255) DEFAULT NULL,
-  `status` enum('active','closed','archived') DEFAULT 'active',
-  `started_at` timestamp NOT NULL DEFAULT current_timestamp(),
-  `ended_at` timestamp NULL DEFAULT NULL,
-  `last_message_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
--- --------------------------------------------------------
-
---
 -- Table structure for table `deleted_patients`
 --
 
@@ -174,68 +157,10 @@ CREATE TABLE `existing_info_patients` (
 
 INSERT INTO `existing_info_patients` (`id`, `patient_id`, `gender`, `height`, `weight`, `blood_type`, `allergies`, `medical_history`, `current_medications`, `family_history`, `updated_at`, `temperature`, `blood_pressure`, `immunization_record`, `chronic_conditions`) VALUES
 (129, 166, 'Male', 34.00, 34.00, 'AB+', 'sad', 'sad', 'sad', 'sad', '2026-01-08 11:51:56', 45.00, '120/80', 'sad', 'sad'),
-(142, 172, 'Female', 45.00, 45.00, 'B+', 'sad', 'asd', 'asd', 'asd', NULL, 45.00, '120/80', 'sad', 'asd'),
-(146, 174, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
-
--- --------------------------------------------------------
-
---
--- Table structure for table `health_chats`
---
-
-CREATE TABLE `health_chats` (
-  `id` int(11) NOT NULL,
-  `staff_id` int(11) NOT NULL,
-  `user_id` int(11) NOT NULL,
-  `message` longtext NOT NULL,
-  `sender_type` enum('staff','user') NOT NULL,
-  `is_read` tinyint(1) DEFAULT 0,
-  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
-  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
--- --------------------------------------------------------
-
---
--- Table structure for table `health_questions`
---
-
-CREATE TABLE `health_questions` (
-  `id` int(11) NOT NULL,
-  `category` varchar(100) NOT NULL,
-  `question` text NOT NULL,
-  `description` text DEFAULT NULL,
-  `icon` varchar(50) DEFAULT NULL,
-  `is_active` tinyint(1) DEFAULT 1,
-  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
-  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
---
--- Dumping data for table `health_questions`
---
-
-INSERT INTO `health_questions` (`id`, `category`, `question`, `description`, `icon`, `is_active`, `created_at`, `updated_at`) VALUES
-(1, 'General Health', 'What symptoms are you experiencing?', 'Describe your current symptoms in detail', '🏥', 1, '2025-11-13 18:32:37', '2025-11-13 18:32:37'),
-(2, 'General Health', 'How long have you had these symptoms?', 'Timeline and duration of symptoms', '⏱️', 1, '2025-11-13 18:32:37', '2025-11-13 18:32:37'),
-(3, 'Fever', 'What is your current body temperature?', 'Your temperature reading', '🌡️', 1, '2025-11-13 18:32:37', '2025-11-13 18:32:37'),
-(4, 'Fever', 'Do you have any cold or flu-like symptoms?', 'Chills, cough, sore throat, etc.', '❄️', 1, '2025-11-13 18:32:37', '2025-11-13 18:32:37'),
-(5, 'Pain', 'Where exactly is the pain located?', 'Specify the body part and area', '📍', 1, '2025-11-13 18:32:37', '2025-11-13 18:32:37'),
-(6, 'Pain', 'On a scale of 1-10, how severe is the pain?', 'Rate your pain level', '📊', 1, '2025-11-13 18:32:37', '2025-11-13 18:32:37'),
-(7, 'Digestive', 'Are you experiencing nausea or vomiting?', 'Describe your digestive symptoms', '🤢', 1, '2025-11-13 18:32:37', '2025-11-13 18:32:37'),
-(8, 'Digestive', 'Any changes in appetite or diet?', 'Changes in eating patterns', '🍽️', 1, '2025-11-13 18:32:37', '2025-11-13 18:32:37'),
-(9, 'Respiratory', 'Are you having trouble breathing?', 'Shortness of breath or respiratory issues', '💨', 1, '2025-11-13 18:32:37', '2025-11-13 18:32:37'),
-(10, 'Respiratory', 'Do you have a persistent cough?', 'Type and duration of cough', '😷', 1, '2025-11-13 18:32:37', '2025-11-13 18:32:37'),
-(11, 'Allergy', 'Do you have any known allergies?', 'Medications, food, or environmental allergies', '⚠️', 1, '2025-11-13 18:32:37', '2025-11-13 18:32:37'),
-(12, 'Medication', 'What medications are you currently taking?', 'List all current medications and dosages', '💊', 1, '2025-11-13 18:32:37', '2025-11-13 18:32:37'),
-(13, 'Pregnancy', 'When is your due date?', 'Expected delivery date', '👶', 1, '2025-11-13 18:32:37', '2025-11-13 18:32:37'),
-(14, 'Pregnancy', 'Any complications during pregnancy?', 'Pregnancy-related concerns', '⚕️', 1, '2025-11-13 18:32:37', '2025-11-13 18:32:37'),
-(15, 'Chronic', 'Do you have any chronic conditions?', 'Diabetes, hypertension, asthma, etc.', '📋', 1, '2025-11-13 18:32:37', '2025-11-13 18:32:37'),
-(16, 'Emergency', 'Is this a medical emergency?', 'Seek immediate medical attention if yes', '🚨', 1, '2025-11-13 18:32:37', '2025-11-13 18:32:37'),
-(17, 'Lifestyle', 'How much exercise do you get weekly?', 'Physical activity level', '🏃', 1, '2025-11-13 18:32:37', '2025-11-13 18:32:37'),
-(18, 'Lifestyle', 'What is your sleep pattern like?', 'Hours and quality of sleep', '😴', 1, '2025-11-13 18:32:37', '2025-11-13 18:32:37'),
-(19, 'Mental Health', 'Are you experiencing stress or anxiety?', 'Mental and emotional health concerns', '🧠', 1, '2025-11-13 18:32:37', '2025-11-13 18:32:37'),
-(20, 'Follow-up', 'How are you feeling after treatment?', 'Recovery and follow-up status', '✅', 1, '2025-11-13 18:32:37', '2025-11-13 18:32:37');
+(142, 172, 'Female', 45.00, 45.00, 'B+', 'Wala ra', 'Naa napaakan ug iro', 'Biogesic', 'Wala ra pud kaloy an sa ginoo', '2026-01-19 23:10:41', 45.00, '120/80', 'Wala pa ugma pa siguro', 'Wala ra kaloy an sa ginoo'),
+(146, 174, 'male', 45.00, 45.00, 'A+', 'sad', 'sad', 'sad', 'sad', '2026-01-19 23:15:43', 45.00, '120/80', 'sad', 'sad'),
+(148, 176, 'Male', 45.00, 45.00, 'A+', 'sad', 'sad', 'sad', 'asd', '2026-01-19 23:11:53', 45.00, '120/80', 'sad', 'sad'),
+(149, 177, 'Male', 34.00, 34.00, 'A+', 'sad', 'sad', 'sad', 'boss JERECHO LATOSA', '2026-01-19 23:12:41', 45.00, '120/80', 'sad', 'sad');
 
 -- --------------------------------------------------------
 
@@ -290,7 +215,8 @@ INSERT INTO `sitio1_announcements` (`id`, `staff_id`, `title`, `message`, `prior
 (50, 2, 'Cebu Eastern College Inc. Sinulog Festival', 'Everyone must come for the celebration of fiesta senor santo nino here in oval at cebu city', 'medium', '2026-01-10', '2026-01-09 00:05:23', NULL, 'archived', 'landing_page', NULL),
 (51, 2, 'Cebu Eastern College Defense', 'Hello', 'normal', '2026-01-14', '2026-01-14 07:17:57', NULL, 'active', 'landing_page', NULL),
 (52, 2, 'Cebu Eastern College Defense', 'Hello', 'medium', '2026-01-14', '2026-01-14 07:18:41', NULL, 'active', 'landing_page', NULL),
-(53, 2, 'Cebu Eastern College Defense', 'Hello', 'high', '2026-01-14', '2026-01-14 07:19:06', NULL, 'active', 'landing_page', NULL);
+(53, 2, 'Cebu Eastern College Defense', 'Hello', 'high', '2026-01-14', '2026-01-14 07:19:06', NULL, 'active', 'landing_page', NULL),
+(54, 2, 'MOBA', 'welcome to mobile legends 4 mins till enemy reaches the battle field smash them', 'high', '2027-05-19', '2026-01-15 06:23:06', NULL, 'active', 'landing_page', NULL);
 
 -- --------------------------------------------------------
 
@@ -325,7 +251,8 @@ INSERT INTO `sitio1_appointments` (`id`, `staff_id`, `date`, `start_time`, `end_
 (175, 2, '2026-01-12', '11:00:00', '12:00:00', 5, 0, 0, '2026-01-12 02:07:30', NULL, NULL, 'General Checkup', 0),
 (176, 2, '2026-01-15', '08:00:00', '09:00:00', 5, 0, 0, '2026-01-14 07:02:18', NULL, NULL, 'General Checkup', 0),
 (177, 2, '2026-01-16', '08:00:00', '09:00:00', 5, 0, 0, '2026-01-14 07:03:41', NULL, NULL, 'General Checkup', 0),
-(178, 2, '2026-01-15', '09:00:00', '10:00:00', 5, 0, 0, '2026-01-14 07:03:56', NULL, NULL, 'General Checkup', 0);
+(178, 2, '2026-01-15', '09:00:00', '10:00:00', 5, 0, 0, '2026-01-14 07:03:56', NULL, NULL, 'General Checkup', 0),
+(179, 2, '2026-01-20', '08:00:00', '09:00:00', 5, 0, 0, '2026-01-19 11:37:51', NULL, NULL, 'General Checkup', 0);
 
 -- --------------------------------------------------------
 
@@ -382,8 +309,10 @@ CREATE TABLE `sitio1_patients` (
 
 INSERT INTO `sitio1_patients` (`id`, `user_id`, `full_name`, `date_of_birth`, `age`, `address`, `sitio`, `disease`, `contact`, `last_checkup`, `medical_history`, `added_by`, `created_at`, `deleted_at`, `restored_at`, `gender`, `updated_at`, `consultation_type`, `civil_status`, `occupation`, `consent_given`, `consent_date`) VALUES
 (166, NULL, 'Archiel R. Cabanag', '1999-01-08', 27, 'Labangon Cebu City', 'Luz Proper', NULL, '09206001470', '2026-01-08', NULL, 2, '2026-01-08 05:28:14', NULL, NULL, 'Male', '2026-01-08 05:28:14', 'onsite', 'Single', 'Student', 1, '2026-01-08 13:28:14'),
-(172, NULL, 'Creshiel Manloloyo', '2026-01-15', 26, 'Labangon Cebu City', 'Panganiban', NULL, '09816497664', '2026-01-15', NULL, 2, '2026-01-14 23:38:51', NULL, '2026-01-14 23:38:51', 'Female', '2026-01-14 23:39:34', 'onsite', 'Single', 'Student', 0, NULL),
-(174, 162, 'Jaycar Otida', NULL, 21, 'Barangay Luz, Cebu City', NULL, NULL, '09206001470', '2026-01-15', NULL, 2, '2026-01-15 00:44:56', NULL, NULL, 'Male', '2026-01-15 00:44:56', 'onsite', NULL, NULL, 0, NULL);
+(172, NULL, 'Creshiel Manloloyo', '2026-01-15', 26, 'Labangon Cebu City', 'Lower Luz', NULL, '09816497664', '2026-01-15', NULL, 2, '2026-01-14 23:38:51', NULL, '2026-01-14 23:38:51', 'Female', '2026-01-19 23:08:01', 'onsite', 'Single', 'Student', 0, NULL),
+(174, 162, 'Jaycar Otida', NULL, 21, 'Barangay Luz, Cebu City', NULL, NULL, '09206001470', '2026-01-15', NULL, 2, '2026-01-15 00:44:56', NULL, NULL, 'Male', '2026-01-15 00:44:56', 'onsite', NULL, NULL, 0, NULL),
+(176, NULL, 'Rica Mae Java', '2000-01-16', 29, 'Gawi, Oslob, Cebu', 'Lower Luz', NULL, '09816497664', '2026-01-16', NULL, 2, '2026-01-15 22:48:33', NULL, NULL, 'Male', '2026-01-19 23:11:53', 'onsite', 'Single', 'Student', 1, '2026-01-16 06:48:33'),
+(177, NULL, 'Jerecho Latosa', '2000-01-20', 26, 'Duljo Fatima, Cebu City', '', NULL, '09206001470', '2026-01-20', NULL, 2, '2026-01-19 21:41:56', NULL, NULL, 'Male', '2026-01-19 23:12:41', 'onsite', 'Single', 'Student', 1, '2026-01-20 05:41:56');
 
 -- --------------------------------------------------------
 
@@ -580,7 +509,8 @@ INSERT INTO `user_appointments` (`id`, `user_id`, `service_id`, `appointment_id`
 (273, 162, 176, 176, 'completed', '01', 'INV-20260114-0273', NULL, 'sad', '2026-01-14 07:07:38', NULL, NULL, NULL, NULL, 0, NULL, 'General Checkup', '2026-01-14 07:07:55', '2026-01-14 15:07:55', '2026-01-14 15:15:48', 'Depression', '0000-00-00 00:00:00', NULL, 0, 0, NULL, '2026-01-14 07:15:48'),
 (274, 162, 178, 178, 'completed', '01', 'INV-20260114-0274', NULL, 'sad', '2026-01-14 12:47:18', NULL, NULL, NULL, NULL, 0, NULL, 'General Checkup', '2026-01-14 12:47:27', '2026-01-14 20:47:27', '2026-01-14 23:11:10', 'Other', '0000-00-00 00:00:00', NULL, 0, 0, NULL, '2026-01-14 15:11:10'),
 (275, 162, 177, 177, 'cancelled', '1', NULL, NULL, 'sad', '2026-01-14 15:12:56', NULL, 'asddsadasd', '2026-01-14 23:13:27', NULL, 0, NULL, 'General Checkup', NULL, NULL, NULL, 'Depression', '0000-00-00 00:00:00', NULL, 0, 1, NULL, '2026-01-14 15:13:27'),
-(276, 162, 177, 177, 'approved', '01', 'INV-20260115-0276', NULL, 'sad', '2026-01-14 23:27:14', NULL, NULL, NULL, NULL, 0, NULL, 'General Checkup', '2026-01-14 23:27:26', '2026-01-15 07:27:26', NULL, 'Other', '0000-00-00 00:00:00', NULL, 0, 0, NULL, '2026-01-14 23:27:26');
+(276, 162, 177, 177, 'missed', '01', 'INV-20260115-0276', NULL, 'sad', '2026-01-14 23:27:14', NULL, NULL, NULL, NULL, 0, NULL, 'General Checkup', '2026-01-14 23:27:26', '2026-01-15 07:27:26', NULL, 'Other', '0000-00-00 00:00:00', NULL, 0, 0, NULL, '2026-01-16 03:33:20'),
+(277, 163, 177, 177, 'missed', '02', 'INV-20260115-0277', NULL, 'hb hbvh', '2026-01-15 06:19:32', NULL, NULL, NULL, NULL, 0, NULL, 'General Checkup', '2026-01-15 06:19:51', '2026-01-15 14:19:51', NULL, 'Other', '0000-00-00 00:00:00', NULL, 0, 0, NULL, '2026-01-16 03:33:20');
 
 -- --------------------------------------------------------
 
@@ -635,16 +565,6 @@ ALTER TABLE `audit_logs`
   ADD PRIMARY KEY (`id`);
 
 --
--- Indexes for table `chat_sessions`
---
-ALTER TABLE `chat_sessions`
-  ADD PRIMARY KEY (`id`),
-  ADD UNIQUE KEY `unique_conversation` (`staff_id`,`user_id`),
-  ADD KEY `user_id` (`user_id`),
-  ADD KEY `idx_status` (`status`),
-  ADD KEY `idx_last_message` (`last_message_at`);
-
---
 -- Indexes for table `deleted_patients`
 --
 ALTER TABLE `deleted_patients`
@@ -656,23 +576,6 @@ ALTER TABLE `deleted_patients`
 ALTER TABLE `existing_info_patients`
   ADD PRIMARY KEY (`id`),
   ADD KEY `patient_id` (`patient_id`);
-
---
--- Indexes for table `health_chats`
---
-ALTER TABLE `health_chats`
-  ADD PRIMARY KEY (`id`),
-  ADD KEY `user_id` (`user_id`),
-  ADD KEY `idx_staff_user` (`staff_id`,`user_id`),
-  ADD KEY `idx_created_at` (`created_at`);
-
---
--- Indexes for table `health_questions`
---
-ALTER TABLE `health_questions`
-  ADD PRIMARY KEY (`id`),
-  ADD KEY `idx_category` (`category`),
-  ADD KEY `idx_active` (`is_active`);
 
 --
 -- Indexes for table `patient_visits`
@@ -794,12 +697,6 @@ ALTER TABLE `audit_logs`
   MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
 
 --
--- AUTO_INCREMENT for table `chat_sessions`
---
-ALTER TABLE `chat_sessions`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
-
---
 -- AUTO_INCREMENT for table `deleted_patients`
 --
 ALTER TABLE `deleted_patients`
@@ -809,19 +706,7 @@ ALTER TABLE `deleted_patients`
 -- AUTO_INCREMENT for table `existing_info_patients`
 --
 ALTER TABLE `existing_info_patients`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=148;
-
---
--- AUTO_INCREMENT for table `health_chats`
---
-ALTER TABLE `health_chats`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
-
---
--- AUTO_INCREMENT for table `health_questions`
---
-ALTER TABLE `health_questions`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=21;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=150;
 
 --
 -- AUTO_INCREMENT for table `patient_visits`
@@ -833,13 +718,13 @@ ALTER TABLE `patient_visits`
 -- AUTO_INCREMENT for table `sitio1_announcements`
 --
 ALTER TABLE `sitio1_announcements`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=54;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=55;
 
 --
 -- AUTO_INCREMENT for table `sitio1_appointments`
 --
 ALTER TABLE `sitio1_appointments`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=179;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=180;
 
 --
 -- AUTO_INCREMENT for table `sitio1_consultations`
@@ -851,7 +736,7 @@ ALTER TABLE `sitio1_consultations`
 -- AUTO_INCREMENT for table `sitio1_patients`
 --
 ALTER TABLE `sitio1_patients`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=176;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=178;
 
 --
 -- AUTO_INCREMENT for table `sitio1_staff`
@@ -887,7 +772,7 @@ ALTER TABLE `user_announcements`
 -- AUTO_INCREMENT for table `user_appointments`
 --
 ALTER TABLE `user_appointments`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=277;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=278;
 
 --
 -- AUTO_INCREMENT for table `user_notifications`
@@ -915,24 +800,10 @@ ALTER TABLE `appointment_reschedule_log`
   ADD CONSTRAINT `appointment_reschedule_log_ibfk_3` FOREIGN KEY (`new_appointment_id`) REFERENCES `sitio1_appointments` (`id`);
 
 --
--- Constraints for table `chat_sessions`
---
-ALTER TABLE `chat_sessions`
-  ADD CONSTRAINT `chat_sessions_ibfk_1` FOREIGN KEY (`staff_id`) REFERENCES `sitio1_staff` (`id`),
-  ADD CONSTRAINT `chat_sessions_ibfk_2` FOREIGN KEY (`user_id`) REFERENCES `sitio1_users` (`id`);
-
---
 -- Constraints for table `existing_info_patients`
 --
 ALTER TABLE `existing_info_patients`
   ADD CONSTRAINT `existing_info_patients_ibfk_1` FOREIGN KEY (`patient_id`) REFERENCES `sitio1_patients` (`id`) ON DELETE CASCADE;
-
---
--- Constraints for table `health_chats`
---
-ALTER TABLE `health_chats`
-  ADD CONSTRAINT `health_chats_ibfk_1` FOREIGN KEY (`staff_id`) REFERENCES `sitio1_staff` (`id`),
-  ADD CONSTRAINT `health_chats_ibfk_2` FOREIGN KEY (`user_id`) REFERENCES `sitio1_users` (`id`);
 
 --
 -- Constraints for table `sitio1_announcements`
