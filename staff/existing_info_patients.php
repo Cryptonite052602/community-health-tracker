@@ -3151,35 +3151,41 @@ if (!empty($selectedPatientId)) {
                 </div>
             </div>
 
-            <!-- Sticky Footer - UPDATED: Added Edit Button -->
-            <div class="p-8 border-t border-gray-200 bg-white rounded-b-2xl sticky bottom-0">
-                <div class="flex flex-wrap items-center justify-between">
-                    <div class="flex flex-col items-start">
-                        <span
-                            class="flex items-center text-center gap-3 text-md text-gray-500 bg-gray-100 px-8 py-5 rounded-full">
-                            <svg width="34" height="34" viewBox="0 0 34 34" fill="none"
-                                xmlns="http://www.w3.org/2000/svg">
-                                <path fill-rule="evenodd" clip-rule="evenodd"
-                                    d="M16.6667 33.3333C25.8717 33.3333 33.3333 25.8717 33.3333 16.6667C33.3333 7.46167 25.8717 0 16.6667 0C7.46167 0 0 7.46167 0 16.6667C0 25.8717 7.46167 33.3333 16.6667 33.3333ZM19.1667 9.58333C19.1667 10.3569 18.8594 11.0987 18.3124 11.6457C17.7654 12.1927 17.0235 12.5 16.25 12.5C15.4765 12.5 14.7346 12.1927 14.1876 11.6457C13.6406 11.0987 13.3333 10.3569 13.3333 9.58333C13.3333 8.80978 13.6406 8.06792 14.1876 7.52094C14.7346 6.97396 15.4765 6.66667 16.25 6.66667C17.0235 6.66667 17.7654 6.97396 18.3124 7.52094C18.8594 8.06792 19.1667 8.80978 19.1667 9.58333ZM17.6008 14.87C17.8264 15.0227 18.0111 15.2283 18.1388 15.4689C18.2665 15.7094 18.3333 15.9776 18.3333 16.25V22.72L19.9117 21.9308L21.4033 24.9117L17.4117 26.9075C17.1576 27.0345 16.8752 27.0944 16.5915 27.0816C16.3077 27.0688 16.0319 26.9836 15.7903 26.8343C15.5487 26.6849 15.3493 26.4763 15.2109 26.2282C15.0726 25.9801 15 25.7007 15 25.4167V18.7117L13.655 19.25L12.4167 16.155L16.0475 14.7025C16.3003 14.6013 16.5741 14.5635 16.8449 14.5926C17.1157 14.6216 17.3752 14.7174 17.6008 14.87Z"
-                                    fill="black" fill-opacity="0.25" />
-                            </svg>
-                            View and edit patient information
-                        </span>
-                    </div>
-                    <div class="flex space-x-4">
-                        <div class="flex flex-col items-center mt-2">
-                            <button onclick="printPatientRecord()" class="btn-export text-lg px-8 py-3 font-semibold">
-                                <i class="fas fa-print mr-3"></i>Print Patient Record
-                            </button>
-                        </div>
-                        <div class="flex flex-col items-center">
-                            <button class="btn-print px-8 py-5">
-                                <i class="fas fa-edit mr-2"></i>Save Medical Information
-                            </button>
-                        </div>
-                    </div>
-                </div>
+            <!-- In your existing_info_patients.php, replace the button section in view modal footer with: -->
+
+<!-- Sticky Footer - UPDATED: Proper form submission -->
+<div class="p-8 border-t border-gray-200 bg-white rounded-b-2xl sticky bottom-0">
+    <div class="flex flex-wrap items-center justify-between">
+        <div class="flex flex-col items-start">
+            <span class="flex items-center text-center gap-3 text-md text-gray-500 bg-gray-100 px-8 py-5 rounded-full">
+                <svg width="34" height="34" viewBox="0 0 34 34" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path fill-rule="evenodd" clip-rule="evenodd"
+                        d="M16.6667 33.3333C25.8717 33.3333 33.3333 25.8717 33.3333 16.6667C33.3333 7.46167 25.8717 0 16.6667 0C7.46167 0 0 7.46167 0 16.6667C0 25.8717 7.46167 33.3333 16.6667 33.3333ZM19.1667 9.58333C19.1667 10.3569 18.8594 11.0987 18.3124 11.6457C17.7654 12.1927 17.0235 12.5 16.25 12.5C15.4765 12.5 14.7346 12.1927 14.1876 11.6457C13.6406 11.0987 13.3333 10.3569 13.3333 9.58333C13.3333 8.80978 13.6406 8.06792 14.1876 7.52094C14.7346 6.97396 15.4765 6.66667 16.25 6.66667C17.0235 6.66667 17.7654 6.97396 18.3124 7.52094C18.8594 8.06792 19.1667 8.80978 19.1667 9.58333ZM17.6008 14.87C17.8264 15.0227 18.0111 15.2283 18.1388 15.4689C18.2665 15.7094 18.3333 15.9776 18.3333 16.25V22.72L19.9117 21.9308L21.4033 24.9117L17.4117 26.9075C17.1576 27.0345 16.8752 27.0944 16.5915 27.0816C16.3077 27.0688 16.0319 26.9836 15.7903 26.8343C15.5487 26.6849 15.3493 26.4763 15.2109 26.2282C15.0726 25.9801 15 25.7007 15 25.4167V18.7117L13.655 19.25L12.4167 16.155L16.0475 14.7025C16.3003 14.6013 16.5741 14.5635 16.8449 14.5926C17.1157 14.6216 17.3752 14.7174 17.6008 14.87Z"
+                        fill="black" fill-opacity="0.25" />
+                </svg>
+                View and edit patient information
+            </span>
+        </div>
+        <div class="flex space-x-4">
+            <div class="flex flex-col items-center mt-2">
+                <button onclick="printPatientRecord()" class="btn-export text-lg px-8 py-3 font-semibold">
+                    <i class="fas fa-print mr-3"></i>Print Patient Record
+                </button>
             </div>
+            <div class="flex flex-col items-center">
+                <!-- This button will be dynamically connected to the form -->
+                <button 
+                    id="saveMedicalBtn"
+                    type="button"
+                    onclick="saveMedicalInformation()"
+                    class="btn-save-medical px-8 py-5 text-lg font-semibold"
+                >
+                    <i class="fas fa-save mr-2"></i>Save Medical Information
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
         </div>
     </div>
 
@@ -3871,62 +3877,134 @@ if (!empty($selectedPatientId)) {
             }, 300);
         }
 
-        // Function to set up medical form when modal content loads
-        function setupMedicalForm() {
-            const healthInfoForm = document.getElementById('healthInfoForm');
-
-            if (healthInfoForm) {
-                // Find the Save Medical Information button and update its class
-                const saveBtn = healthInfoForm.querySelector('button[name="save_health_info"]');
-                if (saveBtn) {
-                    saveBtn.classList.remove('btn-primary', 'bg-primary', 'text-white');
-                    saveBtn.classList.add('btn-save-medical');
-                    saveBtn.innerHTML = '<i class="fas fa-save mr-2"></i> Save Medical Information';
-                }
-
-                // Set up form submission
-                healthInfoForm.addEventListener('submit', async function (e) {
-                    e.preventDefault();
-
-                    // Show loading state
-                    const submitBtn = this.querySelector('button[name="save_health_info"]');
-                    const originalBtnText = submitBtn.innerHTML;
-                    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Saving...';
-                    submitBtn.disabled = true;
-
-                    try {
-                        const formData = new FormData(this);
-                        const response = await fetch(this.action, {
-                            method: 'POST',
-                            body: formData
-                        });
-
-                        if (response.ok) {
-                            // Show success message
-                            showNotification('success', 'Medical information saved successfully!');
-
-                            // Reload the modal content to show updated data
-                            const patientId = formData.get('patient_id');
-                            if (patientId) {
-                                setTimeout(() => {
-                                    openViewModal(patientId);
-                                }, 1500);
-                            }
-                        } else {
-                            showNotification('error', 'Error saving medical information');
-                        }
-
-                    } catch (error) {
-                        showNotification('error', 'Network error: ' + error.message);
-                        console.error('Form submission error:', error);
-                    } finally {
-                        // Restore button
-                        submitBtn.innerHTML = originalBtnText;
-                        submitBtn.disabled = false;
-                    }
-                });
-            }
+        // Function to collect all medical data and submit
+function saveMedicalInformation() {
+    const healthInfoForm = document.getElementById('healthInfoForm');
+    
+    if (!healthInfoForm) {
+        showNotification('error', 'Medical form not found. Please reload the page.');
+        return;
+    }
+    
+    // Validate required fields
+    const requiredFields = healthInfoForm.querySelectorAll('[required]');
+    let isValid = true;
+    let missingFields = [];
+    
+    requiredFields.forEach(field => {
+        if (!field.value.trim()) {
+            isValid = false;
+            missingFields.push(field.name.replace('_', ' '));
+            field.classList.add('field-empty');
+            field.classList.remove('field-filled');
+        } else {
+            field.classList.add('field-filled');
+            field.classList.remove('field-empty');
         }
+    });
+    
+    if (!isValid) {
+        showNotification('error', `Please fill in all required fields: ${missingFields.join(', ')}`);
+        
+        // Scroll to first missing field
+        const firstMissing = healthInfoForm.querySelector('.field-empty');
+        if (firstMissing) {
+            firstMissing.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            firstMissing.focus();
+        }
+        return;
+    }
+    
+    // Collect all form data
+    const formData = new FormData(healthInfoForm);
+    
+    // Add all medical fields explicitly
+    const medicalFields = [
+        'height', 'weight', 'blood_type', 'temperature',
+        'blood_pressure', 'allergies', 'medical_history',
+        'current_medications', 'family_history',
+        'immunization_record', 'chronic_conditions', 'gender'
+    ];
+    
+    medicalFields.forEach(field => {
+        const element = healthInfoForm.querySelector(`[name="${field}"]`);
+        if (element) {
+            formData.set(field, element.value);
+        }
+    });
+    
+    // Show loading state
+    const saveBtn = document.getElementById('saveMedicalBtn');
+    const originalBtnText = saveBtn.innerHTML;
+    saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Saving...';
+    saveBtn.disabled = true;
+    
+    // Submit the form via AJAX
+    fetch(healthInfoForm.action, {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.text())
+    .then(result => {
+        // Check if successful (you might need to adjust this based on your response)
+        if (result.includes('successfully') || result.includes('Success') || result.includes('saved')) {
+            showNotification('success', 'Medical information saved successfully!');
+            
+            // Optionally reload the modal to show updated data
+            const patientId = formData.get('patient_id');
+            if (patientId) {
+                setTimeout(() => {
+                    // Close and reopen modal to refresh data
+                    closeViewModal();
+                    setTimeout(() => {
+                        openViewModal(patientId);
+                    }, 500);
+                }, 2000);
+            }
+        } else {
+            showNotification('error', 'Error saving medical information. Please try again.');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showNotification('error', 'Network error: ' + error.message);
+    })
+    .finally(() => {
+        // Restore button
+        saveBtn.innerHTML = originalBtnText;
+        saveBtn.disabled = false;
+    });
+}
+
+// Updated setupMedicalForm function (simplified)
+function setupMedicalForm() {
+    // This function is now only for setup, not for submission
+    const healthInfoForm = document.getElementById('healthInfoForm');
+    
+    if (healthInfoForm) {
+        // Add input validation styling
+        const inputs = healthInfoForm.querySelectorAll('input, select, textarea');
+        inputs.forEach(input => {
+            input.addEventListener('input', function() {
+                if (this.value.trim()) {
+                    this.classList.add('field-filled');
+                    this.classList.remove('field-empty');
+                } else if (this.hasAttribute('required')) {
+                    this.classList.add('field-empty');
+                    this.classList.remove('field-filled');
+                }
+            });
+            
+            input.addEventListener('blur', function() {
+                if (this.hasAttribute('required') && !this.value.trim()) {
+                    this.classList.add('field-empty');
+                    this.classList.remove('field-filled');
+                }
+            });
+        });
+    }
+}
+
 
         // Print Patient Record Function
         function printPatientRecord() {
