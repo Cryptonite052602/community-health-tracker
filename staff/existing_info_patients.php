@@ -3139,7 +3139,7 @@ if (!empty($selectedPatientId)) {
             </div>
 
             <!-- Scrollable Content -->
-            <div class="p-8 bg-gray-50 flex-1 overflow-y-auto">
+            <div class="px-16 bg-gray-50 flex-1 overflow-y-auto">
                 <div id="modalContent" class="min-h-[500px]">
                     <!-- Content will be loaded via AJAX -->
                     <div class="flex justify-center items-center py-20">
@@ -3190,23 +3190,36 @@ if (!empty($selectedPatientId)) {
         <div class="bg-white rounded-lg shadow-2xl w-full max-w-7xl h-[92vh] overflow-hidden flex flex-col">
             <!-- ================= HEADER ================= -->
             <div class="sticky top-0 z-20 bg-[#2563EB] px-10 py-6 flex items-center">
-                <h3 class="text-xl font-medium flex justify-center text-center w-full items-center text-white">
+                <h3 class="text-xl font-medium flex gap-3 text-center w-full items-center text-white">
+                    <svg width="36" height="36" viewBox="0 0 44 44" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <mask id="mask0_989_9772" style="mask-type:luminance" maskUnits="userSpaceOnUse" x="0" y="0"
+                            width="44" height="44">
+                            <path
+                                d="M38.8125 1H4.4375C2.53902 1 1 2.53902 1 4.4375V38.8125C1 40.711 2.53902 42.25 4.4375 42.25H38.8125C40.711 42.25 42.25 40.711 42.25 38.8125V4.4375C42.25 2.53902 40.711 1 38.8125 1Z"
+                                fill="white" stroke="white" stroke-width="2" stroke-linejoin="round" />
+                            <path d="M21.6247 12.4585V30.7918M12.458 21.6252H30.7913" stroke="black" stroke-width="2"
+                                stroke-linecap="round" stroke-linejoin="round" />
+                        </mask>
+                        <g mask="url(#mask0_989_9772)">
+                            <path d="M-5.875 -5.875H49.125V49.125H-5.875V-5.875Z" fill="white" />
+                        </g>
+                    </svg>
                     Registration For New Patient
                 </h3>
                 <button onclick="closeAddPatientModal()"
-                    class="border-2 border-white hover:bg-white/20 rounded-full w-8 h-8 flex items-center justify-center transition">
-                    <i class="fas fa-times text-xl text-white"></i>
+                    class="w-8 h-8 flex items-center justify-center transition">
+                    <i class="fas fa-times text-3xl text-white"></i>
                 </button>
             </div>
 
             <!-- ================= CONTENT ================= -->
-            <div class="flex-1 overflow-y-auto">
-                <form method="POST" action="" id="patientForm" enctype="multipart/form-data" class="space-y-10">
+            <div class="flex-1 overflow-y-auto px-16">
+                <form method="POST" action="" id="patientForm" enctype="multipart/form-data">
 
                     <!-- ================= PERSONAL INFORMATION ================= -->
-                    <div class="bg-white p-8">
+                    <div class="bg-white my-10">
                         <h3
-                            class="text-2xl font-normal border-b border-black-100 py-4 text-[#2563EB] mb-8 gap-4 flex items-center">
+                            class="text-2xl font-normal border-b border-black-100 py-6 text-[#2563EB] mb-6 gap-4 flex items-center">
                             <svg width="42" height="38" viewBox="0 0 42 38" fill="none"
                                 xmlns="http://www.w3.org/2000/svg">
                                 <path
@@ -3321,9 +3334,9 @@ if (!empty($selectedPatientId)) {
                     </div>
 
                     <!-- ================= MEDICAL INFORMATION ================= -->
-                    <div class="bg-white px-8">
+                    <div class="bg-white">
                         <h3
-                            class="text-2xl border-b border-black-100 py-4 font-normal text-blue-700 gap-4 mb-8 flex items-center">
+                            class="text-2xl border-b border-black-100 font-normal text-blue-700 gap-4 py-6 mb-6 flex items-center">
                             <svg width="42" height="42" viewBox="0 0 42 42" fill="none"
                                 xmlns="http://www.w3.org/2000/svg">
                                 <path
