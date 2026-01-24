@@ -15,7 +15,7 @@ if ($patientId <= 0) {
 }
 
 try {
-    // Get patient basic information with user details
+    // Get patient basic information with user details AND health info
     $stmt = $pdo->prepare("SELECT 
         p.*, 
         u.id as user_id,
@@ -51,7 +51,7 @@ try {
         exit();
     }
     
-    // Get health information - FIXED with proper error handling
+    // Get health information
     $stmt = $pdo->prepare("SELECT * FROM existing_info_patients WHERE patient_id = ?");
     $stmt->execute([$patientId]);
     $healthInfo = $stmt->fetch(PDO::FETCH_ASSOC);
@@ -62,9 +62,15 @@ try {
     }
     
     // Get visit history
-    $stmt = $pdo->prepare("SELECT * FROM patient_visits WHERE patient_id = ? ORDER BY visit_date DESC");
-    $stmt->execute([$patientId]);
-    $visits = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    $visits = [];
+    try {
+        $stmt = $pdo->prepare("SELECT * FROM patient_visits WHERE patient_id = ? ORDER BY visit_date DESC");
+        $stmt->execute([$patientId]);
+        $visits = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    } catch (PDOException $e) {
+        // If table doesn't exist, just continue without visits
+        error_log("Visit history not available: " . $e->getMessage());
+    }
     
 } catch (PDOException $e) {
     header('HTTP/1.0 500 Internal Server Error');
@@ -76,6 +82,31 @@ $dateOfBirthDisplay = '';
 if (!empty($patient['display_date_of_birth'])) {
     $dateOfBirthDisplay = date('F j, Y', strtotime($patient['display_date_of_birth']));
 }
+
+// Get attending physician name from session
+$attendingPhysician = $_SESSION['user']['full_name'] ?? 'Dr. Medical Officer';
+
+// Get BHW Assigned from patient table
+$bhwAssigned = !empty($patient['bhw_assigned']) ? $patient['bhw_assigned'] : 'Not Assigned';
+
+// Extract BHW initials for ID
+$bhwInitials = '';
+if ($bhwAssigned !== 'Not Assigned') {
+    $words = explode(' ', $bhwAssigned);
+    foreach ($words as $word) {
+        if (!empty($word)) {
+            $bhwInitials .= strtoupper(substr($word, 0, 1));
+        }
+    }
+    if (empty($bhwInitials)) {
+        $bhwInitials = 'BHW';
+    }
+} else {
+    $bhwInitials = 'BHW';
+}
+
+// Get staff license number
+$staffLicenseNo = 'PRC-' . str_pad($_SESSION['user']['id'] ?? '0000', 6, '0', STR_PAD_LEFT);
 
 // Generate HTML for printing
 ob_start();
@@ -524,7 +555,7 @@ ob_start();
             <?php endif; ?>
         </div>
         
-        <!-- Personal Information Section -->
+        <!-- Personal Information Section - ADDED ALL MISSING FIELDS -->
         <div class="section">
             <div class="section-title">I. PERSONAL INFORMATION</div>
             <table class="info-table">
@@ -564,6 +595,19 @@ ob_start();
                     <th>Complete Address</th>
                     <td colspan="3" class="data-value"><?= $patient['display_address'] ? htmlspecialchars($patient['display_address']) : '<span class="empty-data">Not specified</span>' ?></td>
                 </tr>
+                <!-- ADDED MISSING FIELDS -->
+                <tr>
+                    <th>PHIC Number</th>
+                    <td class="data-value"><?= !empty($patient['phic_no']) ? htmlspecialchars($patient['phic_no']) : '<span class="empty-data">Not specified</span>' ?></td>
+                    <th>Family Number</th>
+                    <td class="data-value"><?= !empty($patient['family_no']) ? htmlspecialchars($patient['family_no']) : '<span class="empty-data">Not specified</span>' ?></td>
+                </tr>
+                <tr>
+                    <th>4P's Member</th>
+                    <td class="data-value"><?= !empty($patient['fourps_member']) ? htmlspecialchars($patient['fourps_member']) : '<span class="empty-data">Not specified</span>' ?></td>
+                    <th>BHW Assigned</th>
+                    <td class="data-value"><?= htmlspecialchars($bhwAssigned) ?></td>
+                </tr>
                 <tr>
                     <th>Last Check-up</th>
                     <td class="data-value"><?= $patient['last_checkup'] ? date('F j, Y', strtotime($patient['last_checkup'])) : '<span class="empty-data">No record</span>' ?></td>
@@ -573,6 +617,17 @@ ob_start();
                         <strong>REGISTERED BARANGAY RESIDENT</strong>
                         <?php else: ?>
                         WALK-IN PATIENT
+                        <?php endif; ?>
+                    </td>
+                </tr>
+                <tr>
+                    <th>Date Registered</th>
+                    <td class="data-value"><?= $patient['created_at'] ? date('F j, Y', strtotime($patient['created_at'])) : '<span class="empty-data">Not specified</span>' ?></td>
+                    <th>Consent Given</th>
+                    <td class="data-value">
+                        <?= (!empty($patient['consent_given']) && $patient['consent_given'] == 1) ? 'YES' : 'NO' ?>
+                        <?php if (!empty($patient['consent_date'])): ?>
+                            (<?= date('m/d/Y', strtotime($patient['consent_date'])) ?>)
                         <?php endif; ?>
                     </td>
                 </tr>
@@ -629,6 +684,20 @@ ob_start();
                     <th>Chronic Conditions</th>
                     <td colspan="3" class="data-value"><?= isset($healthInfo['chronic_conditions']) && !empty($healthInfo['chronic_conditions']) ? htmlspecialchars($healthInfo['chronic_conditions']) : '<span class="empty-data">None reported</span>' ?></td>
                 </tr>
+                <tr>
+                    <th>Health Record Updated</th>
+                    <td colspan="3" class="data-value">
+                        <?php
+                        if (!empty($patient['updated_at'])) {
+                            echo date('F j, Y \a\t g:i A', strtotime($patient['updated_at']));
+                        } elseif (!empty($patient['created_at'])) {
+                            echo date('F j, Y \a\t g:i A', strtotime($patient['created_at']));
+                        } else {
+                            echo '<span class="empty-data">Not recorded</span>';
+                        }
+                        ?>
+                    </td>
+                </tr>
             </table>
         </div>
         
@@ -663,23 +732,31 @@ ob_start();
         </div>
         <?php endif; ?>
         
-        <!-- Signature Section -->
+        <!-- Signature Section - UPDATED WITH NAMES ON SIGNATURE LINES -->
         <div class="signature-section">
             <div class="signature-box">
-                <div class="signature-line"></div>
+                <div class="signature-line" style="position: relative;">
+                    <div style="position: absolute; bottom: 5px; left: 0; right: 0; text-align: center; font-weight: 600; font-size: 11pt;">
+                        <?= htmlspecialchars($attendingPhysician) ?>
+                    </div>
+                </div>
                 <div class="signature-label">ATTENDING PHYSICIAN/MEDICAL STAFF</div>
                 <div class="signature-details">
-                    Dr. <?= htmlspecialchars($_SESSION['user']['full_name'] ?? 'Medical Officer') ?><br>
-                    License No: PRC-<?= str_pad($_SESSION['user']['id'] ?? '0000', 6, '0', STR_PAD_LEFT) ?>
+                    License No: <?= $staffLicenseNo ?><br>
+                    Date: <?= date('F j, Y') ?>
                 </div>
             </div>
             
             <div class="signature-box">
-                <div class="signature-line"></div>
+                <div class="signature-line" style="position: relative;">
+                    <div style="position: absolute; bottom: 5px; left: 0; right: 0; text-align: center; font-weight: 600; font-size: 11pt;">
+                        <?= htmlspecialchars($bhwAssigned) ?>
+                    </div>
+                </div>
                 <div class="signature-label">BARANGAY HEALTH WORKER</div>
                 <div class="signature-details">
                     Barangay Luz Health Center<br>
-                    BHW ID: BHW-LUZ-<?= date('Y') ?>-<?= str_pad($patientId, 4, '0', STR_PAD_LEFT) ?>
+                    BHW ID: BHW-LUZ-<?= $bhwInitials ?>-<?= date('Y') ?>-<?= str_pad($patientId, 4, '0', STR_PAD_LEFT) ?>
                 </div>
             </div>
         </div>
@@ -744,7 +821,7 @@ ob_start();
                     // Create workbook
                     const wb = XLSX.utils.book_new();
                     
-                    // Patient Information Sheet
+                    // Patient Information Sheet - UPDATED WITH ALL FIELDS
                     const patientData = [
                         ['BARANGAY LUZ HEALTH CENTER - PATIENT HEALTH RECORD'],
                         ['Official Document - Generated on: <?= date('F j, Y, g:i a') ?>'],
@@ -759,7 +836,13 @@ ob_start();
                         ['Contact Number:', '<?= addslashes($patient['display_contact'] ?? 'Not specified') ?>'],
                         ['Address:', '<?= addslashes($patient['display_address'] ?? 'Not specified') ?>'],
                         ['Sitio/Purok:', '<?= addslashes($patient['display_sitio'] ?? 'Not specified') ?>'],
+                        ['PHIC Number:', '<?= addslashes($patient['phic_no'] ?? 'Not specified') ?>'],
+                        ['Family Number:', '<?= addslashes($patient['family_no'] ?? 'Not specified') ?>'],
+                        ['4P\'s Member:', '<?= addslashes($patient['fourps_member'] ?? 'Not specified') ?>'],
+                        ['BHW Assigned:', '<?= addslashes($bhwAssigned) ?>'],
                         ['Last Check-up:', '<?= $patient['last_checkup'] ? date('F j, Y', strtotime($patient['last_checkup'])) : 'No record' ?>'],
+                        ['Date Registered:', '<?= $patient['created_at'] ? date('F j, Y', strtotime($patient['created_at'])) : 'Not specified' ?>'],
+                        ['Consent Given:', '<?= (!empty($patient['consent_given']) && $patient['consent_given'] == 1) ? 'YES' : 'NO' ?>'],
                         ['Patient Type:', '<?= !empty($patient['unique_number']) ? 'Registered Barangay Resident' : 'Walk-in Patient' ?>'],
                         [''],
                         ['HEALTH INFORMATION'],
@@ -774,6 +857,13 @@ ob_start();
                         ['Family History:', '<?= isset($healthInfo['family_history']) ? addslashes($healthInfo['family_history']) : 'None reported' ?>'],
                         ['Immunization Record:', '<?= isset($healthInfo['immunization_record']) ? addslashes($healthInfo['immunization_record']) : 'Not available' ?>'],
                         ['Chronic Conditions:', '<?= isset($healthInfo['chronic_conditions']) ? addslashes($healthInfo['chronic_conditions']) : 'None reported' ?>'],
+                        ['Health Record Updated:', '<?= $patient['updated_at'] ? date('F j, Y \a\t g:i A', strtotime($patient['updated_at'])) : ($patient['created_at'] ? date('F j, Y \a\t g:i A', strtotime($patient['created_at'])) : 'Not recorded') ?>'],
+                        [''],
+                        ['SIGNATURES'],
+                        ['Attending Physician:', '<?= addslashes($attendingPhysician) ?>'],
+                        ['License No:', '<?= $staffLicenseNo ?>'],
+                        ['Barangay Health Worker:', '<?= addslashes($bhwAssigned) ?>'],
+                        ['BHW ID:', 'BHW-LUZ-<?= $bhwInitials ?>-<?= date('Y') ?>-<?= str_pad($patientId, 4, '0', STR_PAD_LEFT) ?>'],
                         [''],
                         ['DOCUMENT INFORMATION'],
                         ['Generated by:', '<?= addslashes($_SESSION['user']['full_name'] ?? 'System') ?>'],
@@ -811,7 +901,7 @@ ob_start();
                     }
                     
                     // Generate and download
-                    const fileName = `Barangay_Luz_Health_Record_<?= addslashes($patient['display_full_name']) ?>_<?= date('Y-m-d') ?>.xlsx`;
+                    const fileName = `Barangay_Luz_Health_Record_<?= preg_replace('/[^a-zA-Z0-9]/', '_', $patient['display_full_name']) ?>_<?= date('Y-m-d') ?>.xlsx`;
                     XLSX.writeFile(wb, fileName);
                     
                 } catch (error) {
@@ -852,7 +942,7 @@ ob_start();
                         heightLeft -= pageHeight;
                     }
                     
-                    pdf.save(`Barangay_Luz_Health_Record_<?= addslashes($patient['display_full_name']) ?>_<?= date('Y-m-d') ?>.pdf`);
+                    pdf.save(`Barangay_Luz_Health_Record_<?= preg_replace('/[^a-zA-Z0-9]/', '_', $patient['display_full_name']) ?>_<?= date('Y-m-d') ?>.pdf`);
                     hideLoading();
                 }).catch(error => {
                     alert('Error generating PDF: ' + error.message);

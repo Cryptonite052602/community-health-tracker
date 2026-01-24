@@ -1,8 +1,54 @@
 <?php
-// staff_announcements.php
+// staff/announcements.php
 require_once __DIR__ . '/../includes/auth.php';
-require_once __DIR__ . '/../staff/notification_functions.php';
 
+// Add notification functions before they're called
+function createTargetedAnnouncementNotification($announcementId, $title, $targetUsers) {
+    global $pdo;
+    
+    try {
+        $message = "New announcement: " . $title;
+        $link = "/community-health-tracker/announcements.php";
+        
+        foreach ($targetUsers as $userId) {
+            $stmt = $pdo->prepare("INSERT INTO notifications (user_id, type, message, link, created_at) 
+                                  VALUES (?, 'announcement', ?, ?, NOW())");
+            $stmt->execute([$userId, $message, $link]);
+        }
+        
+        return true;
+    } catch (PDOException $e) {
+        error_log("Error creating targeted notifications: " . $e->getMessage());
+        return false;
+    }
+}
+
+function createAnnouncementNotification($announcementId, $title) {
+    global $pdo;
+    
+    try {
+        $message = "New announcement: " . $title;
+        $link = "/community-health-tracker/announcements.php";
+        
+        // Get all approved users
+        $stmt = $pdo->prepare("SELECT id FROM sitio1_users WHERE approved = TRUE");
+        $stmt->execute();
+        $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        
+        foreach ($users as $user) {
+            $stmt = $pdo->prepare("INSERT INTO notifications (user_id, type, message, link, created_at) 
+                                  VALUES (?, 'announcement', ?, ?, NOW())");
+            $stmt->execute([$user['id'], $message, $link]);
+        }
+        
+        return true;
+    } catch (PDOException $e) {
+        error_log("Error creating public notifications: " . $e->getMessage());
+        return false;
+    }
+}
+
+// Rest of your existing code...
 redirectIfNotLoggedIn();
 if (!isStaff()) {
     header('Location: /community-health-tracker/');
@@ -223,9 +269,8 @@ try {
     body {
         font-family: 'Poppins', sans-serif;
         line-height: 1.6;
-        background-color: #ecf0f1; /* Light background for contrast */
+        background-color: #ecf0f1;
         color: var(--secondary);
-
     }
 
     :root {
@@ -252,7 +297,7 @@ try {
         padding: 1.25rem;
         border-bottom: 1px solid var(--border);
         background: var(--light);
-        font-weight: 600; /* Added Poppins weight */
+        font-weight: 600;
     }
 
     .card-body {
@@ -277,7 +322,7 @@ try {
         border-radius: 6px;
         font-size: 0.875rem;
         transition: border-color 0.2s;
-        font-family: 'Poppins', sans-serif; /* Ensure form controls use Poppins */
+        font-family: 'Poppins', sans-serif;
     }
 
     .form-control:focus {
@@ -303,7 +348,7 @@ try {
         transition: all 0.2s;
         text-decoration: none;
         gap: 0.5rem;
-        font-family: 'Poppins', sans-serif; /* Ensure buttons use Poppins */
+        font-family: 'Poppins', sans-serif;
     }
 
     .btn-primary {
@@ -322,7 +367,6 @@ try {
         background: var(--success);
         color: white;
         border-radius: 30px;
-        
     }
 
     .btn-success:hover {
