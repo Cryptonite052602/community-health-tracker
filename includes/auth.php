@@ -1,5 +1,8 @@
 <?php
-session_start();
+// auth.php - UPDATED with session check
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
 require_once __DIR__ . '/../config/database.php';
 
 function isLoggedIn() {

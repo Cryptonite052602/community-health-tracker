@@ -10,12 +10,6 @@ if (!isStaff()) {
     exit();
 }
 
-// Add PhpSpreadsheet for Excel export
-// require_once __DIR__ . '/../vendor/autoload.php';
-
-// use PhpOffice\PhpSpreadsheet\Spreadsheet;
-// use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
-
 $message = '';
 $error = '';
 
@@ -24,6 +18,10 @@ $civilStatusExists = false;
 $occupationExists = false;
 $sitioExists = false;
 $dateOfBirthExists = false;
+$phicNoExists = false;
+$bhwAssignedExists = false;
+$familyNoExists = false;
+$fourpsMemberExists = false;
 
 try {
     // Check if civil_status column exists
@@ -46,10 +44,68 @@ try {
     $stmt->execute();
     $dateOfBirthExists = $stmt->rowCount() > 0;
 
+    // Check if new columns exist
+    $stmt = $pdo->prepare("SHOW COLUMNS FROM sitio1_patients LIKE 'phic_no'");
+    $stmt->execute();
+    $phicNoExists = $stmt->rowCount() > 0;
+
+    $stmt = $pdo->prepare("SHOW COLUMNS FROM sitio1_patients LIKE 'bhw_assigned'");
+    $stmt->execute();
+    $bhwAssignedExists = $stmt->rowCount() > 0;
+
+    $stmt = $pdo->prepare("SHOW COLUMNS FROM sitio1_patients LIKE 'family_no'");
+    $stmt->execute();
+    $familyNoExists = $stmt->rowCount() > 0;
+
+    $stmt = $pdo->prepare("SHOW COLUMNS FROM sitio1_patients LIKE 'fourps_member'");
+    $stmt->execute();
+    $fourpsMemberExists = $stmt->rowCount() > 0;
+
+    // Add new columns if they don't exist
+    if (!$phicNoExists) {
+        $pdo->exec("ALTER TABLE sitio1_patients ADD COLUMN phic_no VARCHAR(20) NULL AFTER occupation");
+    }
+    
+    if (!$bhwAssignedExists) {
+        $pdo->exec("ALTER TABLE sitio1_patients ADD COLUMN bhw_assigned VARCHAR(100) NULL AFTER phic_no");
+    }
+    
+    if (!$familyNoExists) {
+        $pdo->exec("ALTER TABLE sitio1_patients ADD COLUMN family_no VARCHAR(50) NULL AFTER bhw_assigned");
+    }
+    
+    if (!$fourpsMemberExists) {
+        $pdo->exec("ALTER TABLE sitio1_patients ADD COLUMN fourps_member ENUM('Yes', 'No') DEFAULT 'No' AFTER family_no");
+    }
+
     // If date_of_birth column doesn't exist, add it
     if (!$dateOfBirthExists) {
         $pdo->exec("ALTER TABLE sitio1_patients ADD COLUMN date_of_birth DATE NULL AFTER full_name");
-        $dateOfBirthExists = true;
+    }
+
+    // Check if consultation_notes table exists, if not create it
+    $stmt = $pdo->prepare("SHOW TABLES LIKE 'consultation_notes'");
+    $stmt->execute();
+    $consultationNotesTableExists = $stmt->rowCount() > 0;
+
+    if (!$consultationNotesTableExists) {
+        // Create consultation_notes table
+        $createTableQuery = "CREATE TABLE consultation_notes (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            patient_id INT NOT NULL,
+            note TEXT NOT NULL,
+            consultation_date DATE NOT NULL,
+            next_consultation_date DATE NULL,
+            created_by INT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP NULL ON UPDATE CURRENT_TIMESTAMP,
+            FOREIGN KEY (patient_id) REFERENCES sitio1_patients(id) ON DELETE CASCADE,
+            FOREIGN KEY (created_by) REFERENCES sitio1_users(id) ON DELETE CASCADE,
+            INDEX idx_patient_id (patient_id),
+            INDEX idx_created_by (created_by)
+        )";
+
+        $pdo->exec($createTableQuery);
     }
 
     // Check if deleted_patients table exists, if not create it
@@ -72,13 +128,15 @@ try {
             added_by INT,
             user_id INT,
             deleted_by INT,
-            -- Auto-generated timestamps
             deleted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            -- Optional columns from sitio1_patients
             sitio VARCHAR(255) NULL,
             civil_status VARCHAR(100) NULL,
             occupation VARCHAR(255) NULL,
+            phic_no VARCHAR(20) NULL,
+            bhw_assigned VARCHAR(100) NULL,
+            family_no VARCHAR(50) NULL,
+            fourps_member ENUM('Yes', 'No') DEFAULT 'No',
             consent_given TINYINT(1) DEFAULT 1,
             consent_date TIMESTAMP NULL,
             deleted_reason VARCHAR(500) NULL
@@ -92,6 +150,10 @@ try {
     $occupationExists = false;
     $sitioExists = false;
     $dateOfBirthExists = false;
+    $phicNoExists = false;
+    $bhwAssignedExists = false;
+    $familyNoExists = false;
+    $fourpsMemberExists = false;
 }
 
 // Handle form submission for editing health info
@@ -136,6 +198,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_health_info'])) 
             $family_history = !empty($_POST['family_history']) ? $_POST['family_history'] : null;
             $immunization_record = !empty($_POST['immunization_record']) ? $_POST['immunization_record'] : null;
             $chronic_conditions = !empty($_POST['chronic_conditions']) ? $_POST['chronic_conditions'] : null;
+            $phic_no = !empty($_POST['phic_no']) ? $_POST['phic_no'] : null;
+            $bhw_assigned = !empty($_POST['bhw_assigned']) ? $_POST['bhw_assigned'] : null;
+            $family_no = !empty($_POST['family_no']) ? $_POST['family_no'] : null;
+            $fourps_member = !empty($_POST['fourps_member']) ? $_POST['fourps_member'] : 'No';
 
             // Check if record exists
             $stmt = $pdo->prepare("SELECT id FROM existing_info_patients WHERE patient_id = ?");
@@ -165,9 +231,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_health_info'])) 
                     $patient_id
                 ]);
 
-                // Also update the gender in the main patient table
-                $stmt = $pdo->prepare("UPDATE sitio1_patients SET gender = ? WHERE id = ?");
-                $stmt->execute([$gender, $patient_id]);
+                // Update the patient table with new fields
+                $updatePatientQuery = "UPDATE sitio1_patients SET gender = ?, phic_no = ?, bhw_assigned = ?, family_no = ?, fourps_member = ? WHERE id = ?";
+                $stmt = $pdo->prepare($updatePatientQuery);
+                $stmt->execute([$gender, $phic_no, $bhw_assigned, $family_no, $fourps_member, $patient_id]);
 
                 $message = "Patient health information updated successfully!";
             } else {
@@ -193,9 +260,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_health_info'])) 
                     $chronic_conditions
                 ]);
 
-                // Also update the gender in the main patient table
-                $stmt = $pdo->prepare("UPDATE sitio1_patients SET gender = ? WHERE id = ?");
-                $stmt->execute([$gender, $patient_id]);
+                // Update the patient table with new fields
+                $updatePatientQuery = "UPDATE sitio1_patients SET gender = ?, phic_no = ?, bhw_assigned = ?, family_no = ?, fourps_member = ? WHERE id = ?";
+                $stmt = $pdo->prepare($updatePatientQuery);
+                $stmt->execute([$gender, $phic_no, $bhw_assigned, $family_no, $fourps_member, $patient_id]);
 
                 $message = "Patient health information saved successfully!";
             }
@@ -218,7 +286,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_patient'])) {
     $sitio = trim($_POST['sitio']);
     $contact = trim($_POST['contact']);
     $lastCheckup = trim($_POST['last_checkup']);
-    $consent_given = 1; // Always give consent since we removed the checkbox
+    $phic_no = trim($_POST['phic_no']);
+    $bhw_assigned = trim($_POST['bhw_assigned']);
+    $family_no = trim($_POST['family_no']);
+    $fourps_member = trim($_POST['fourps_member']);
+    $consent_given = 1;
     $userId = !empty($_POST['user_id']) ? intval($_POST['user_id']) : null;
 
     // Medical information
@@ -260,6 +332,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_patient'])) {
                 $columns[] = "occupation";
                 $placeholders[] = "?";
                 $values[] = $occupation;
+            }
+
+            if ($phicNoExists) {
+                $columns[] = "phic_no";
+                $placeholders[] = "?";
+                $values[] = $phic_no;
+            }
+
+            if ($bhwAssignedExists) {
+                $columns[] = "bhw_assigned";
+                $placeholders[] = "?";
+                $values[] = $bhw_assigned;
+            }
+
+            if ($familyNoExists) {
+                $columns[] = "family_no";
+                $placeholders[] = "?";
+                $values[] = $family_no;
+            }
+
+            if ($fourpsMemberExists) {
+                $columns[] = "fourps_member";
+                $placeholders[] = "?";
+                $values[] = $fourps_member;
             }
 
             $insertQuery = "INSERT INTO sitio1_patients (" . implode(", ", $columns) . ") VALUES (" . implode(", ", $placeholders) . ")";
@@ -305,7 +401,93 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_patient'])) {
     }
 }
 
-// NEW: Handle manual export POST request
+// Handle adding consultation note
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_consultation_note'])) {
+    $patient_id = $_POST['patient_id'];
+    $note = trim($_POST['note']);
+    $consultation_date = $_POST['consultation_date'];
+    $next_consultation_date = !empty($_POST['next_consultation_date']) ? $_POST['next_consultation_date'] : null;
+    
+    if (!empty($patient_id) && !empty($note) && !empty($consultation_date)) {
+        try {
+            // Verify patient belongs to current staff member
+            $stmt = $pdo->prepare("SELECT id FROM sitio1_patients WHERE id = ? AND added_by = ?");
+            $stmt->execute([$patient_id, $_SESSION['user']['id']]);
+            
+            if (!$stmt->fetch()) {
+                $error = "Patient not found or access denied!";
+            } else {
+                $stmt = $pdo->prepare("INSERT INTO consultation_notes 
+                    (patient_id, note, consultation_date, next_consultation_date, created_by) 
+                    VALUES (?, ?, ?, ?, ?)");
+                $stmt->execute([
+                    $patient_id,
+                    $note,
+                    $consultation_date,
+                    $next_consultation_date,
+                    $_SESSION['user']['id']
+                ]);
+                
+                $message = "Consultation note added successfully!";
+            }
+        } catch (PDOException $e) {
+            $error = "Error adding consultation note: " . $e->getMessage();
+        }
+    } else {
+        $error = "Please fill in all required fields for consultation note.";
+    }
+}
+
+// Handle PDF Export
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['export_pdf'])) {
+    $selectedPatients = isset($_POST['selected_patients']) ? $_POST['selected_patients'] : [];
+
+    if (empty($selectedPatients)) {
+        $error = 'Please select at least one patient to export.';
+    } else {
+        try {
+            // Prepare placeholders for IN clause
+            $placeholders = implode(',', array_fill(0, count($selectedPatients), '?'));
+
+            // COMPREHENSIVE QUERY: Get ALL fields from both tables
+            $query = "SELECT 
+                p.*,
+                e.*,
+                CASE 
+                    WHEN p.user_id IS NOT NULL THEN 'Registered Patient'
+                    ELSE 'Regular Patient'
+                END as patient_type,
+                u.email as user_email,
+                u.unique_number
+            FROM sitio1_patients p
+            LEFT JOIN existing_info_patients e ON p.id = e.patient_id
+            LEFT JOIN sitio1_users u ON p.user_id = u.id
+            WHERE p.id IN ($placeholders) AND p.added_by = ? AND p.deleted_at IS NULL
+            ORDER BY p.full_name ASC";
+
+            $params = array_merge($selectedPatients, [$_SESSION['user']['id']]);
+            $stmt = $pdo->prepare($query);
+            $stmt->execute($params);
+            $patients = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+            if (empty($patients)) {
+                $error = "No patients found for export.";
+            } else {
+                // Store patients in session for PDF generation
+                $_SESSION['pdf_export_data'] = $patients;
+                
+                // Redirect to PDF generator
+                header('Location: generate_pdf.php');
+                exit();
+            }
+
+        } catch (Exception $e) {
+            $error = "Error exporting selected patients: " . $e->getMessage();
+        }
+    }
+}
+
+// Handle manual export POST request
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['export_manual'])) {
     $selectedPatients = isset($_POST['selected_patients']) ? $_POST['selected_patients'] : [];
 
@@ -337,102 +519,134 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['export_manual'])) {
             $stmt->execute($params);
             $patients = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-            // Set filename
-            $filename = 'detailed_patient_export_' . date('Y-m-d_His') . '.xls';
+            // Set filename with current date and time
+            $filename = 'Barangay_Luz_Manual_Export_' . date('Y-m-d_His') . '.xls';
 
-            // CLEAN OUTPUT - Start fresh output buffer
+            // Clean output
             ob_clean();
 
-            // Output ONLY Excel content - NO HTML headers, NO website content
+            // Output professional Excel format
             header("Content-Type: application/vnd.ms-excel");
             header("Content-Disposition: attachment; filename=\"$filename\"");
+            header("Pragma: no-cache");
+            header("Expires: 0");
 
-            // Start table directly without HTML doctype or headers
-            echo '<table border="1">
-                <thead>
-                    <tr>
-                        <th>Patient ID</th>
-                        <th>User ID</th>
-                        <th>Full Name</th>
-                        <th>Date of Birth</th>
-                        <th>Age</th>
-                        <th>Address</th>
-                        <th>Sitio</th>
-                        <th>Disease</th>
-                        <th>Contact</th>
-                        <th>Last Checkup</th>
-                        <th>Medical History</th>
-                        <th>Added By</th>
-                        <th>Created At</th>
-                        <th>Gender</th>
-                        <th>Updated At</th>
-                        <th>Consultation Type</th>
-                        <th>Civil Status</th>
-                        <th>Occupation</th>
-                        <th>Consent Given</th>
-                        <th>Consent Date</th>
-                        <th>Height (cm)</th>
-                        <th>Weight (kg)</th>
-                        <th>Blood Type</th>
-                        <th>Allergies</th>
-                        <th>Medical History (detailed)</th>
-                        <th>Current Medications</th>
-                        <th>Family History</th>
-                        <th>Health Updated At</th>
-                        <th>Temperature (°C)</th>
-                        <th>Blood Pressure</th>
-                        <th>Immunization Record</th>
-                        <th>Chronic Conditions</th>
-                        <th>Patient Type</th>
-                        <th>User Email</th>
-                        <th>Unique Number</th>
-                    </tr>
-                </thead>
-                <tbody>';
-
+            // Generate professional Excel file
+            echo '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">';
+            echo '<head>';
+            echo '<meta charset="UTF-8">';
+            echo '<style>';
+            echo 'table { border-collapse: collapse; width: 100%; font-family: Calibri, Arial, sans-serif; }';
+            echo 'th { background-color: #12AF03; color: white; font-weight: bold; padding: 12px; text-align: left; border: 1px solid #ddd; }';
+            echo 'td { padding: 10px; border: 1px solid #ddd; vertical-align: top; }';
+            echo '.header-row { background-color: #2c3e50; color: white; font-size: 14pt; font-weight: bold; }';
+            echo '.info-row { background-color: #f0f9ff; }';
+            echo '.selected-count { background-color: #d1fae5; font-weight: bold; }';
+            echo '</style>';
+            echo '</head>';
+            echo '<body>';
+            
+            // Header
+            echo '<table border="1">';
+            echo '<tr class="header-row">';
+            echo '<td colspan="15" style="text-align: center; padding: 15px;">BARANGAY LUZ HEALTH CENTER - MANUAL PATIENT EXPORT</td>';
+            echo '</tr>';
+            echo '<tr class="info-row">';
+            echo '<td colspan="5">Export Date:</td>';
+            echo '<td colspan="5">' . date('F j, Y') . '</td>';
+            echo '<td colspan="5">Export Time:</td>';
+            echo '<td colspan="5">' . date('h:i A') . '</td>';
+            echo '</tr>';
+            echo '<tr class="info-row">';
+            echo '<td colspan="5">Generated By:</td>';
+            echo '<td colspan="5">' . $_SESSION['user']['full_name'] . '</td>';
+            echo '<td colspan="5">Total Selected:</td>';
+            echo '<td colspan="5" class="selected-count">' . count($selectedPatients) . ' patients</td>';
+            echo '</tr>';
+            echo '<tr class="selected-count">';
+            echo '<td colspan="15" style="text-align: center; padding: 10px;">';
+            echo '✅ SUCCESSFUL MANUAL EXPORT - ' . count($selectedPatients) . ' PATIENTS SELECTED';
+            echo '</td>';
+            echo '</tr>';
+            echo '<tr><td colspan="15">&nbsp;</td></tr>';
+            
+            // Main data table
+            echo '<tr>';
+            echo '<th>No.</th>';
+            echo '<th>Patient ID</th>';
+            echo '<th>Full Name</th>';
+            echo '<th>Date of Birth</th>';
+            echo '<th>Age</th>';
+            echo '<th>Gender</th>';
+            echo '<th>Sitio</th>';
+            echo '<th>Civil Status</th>';
+            echo '<th>Occupation</th>';
+            echo '<th>Contact</th>';
+            echo '<th>Blood Type</th>';
+            echo '<th>Height (cm)</th>';
+            echo '<th>Weight (kg)</th>';
+            echo '<th>Last Checkup</th>';
+            echo '<th>Patient Type</th>';
+            echo '</tr>';
+            
+            $counter = 1;
             foreach ($patients as $patient) {
-                echo '<tr>
-                    <td>' . ($patient['id'] ?? '') . '</td>
-                    <td>' . ($patient['user_id'] ?? '') . '</td>
-                    <td>' . ($patient['full_name'] ?? '') . '</td>
-                    <td>' . (!empty($patient['date_of_birth']) ? date('Y-m-d', strtotime($patient['date_of_birth'])) : '') . '</td>
-                    <td>' . ($patient['age'] ?? '') . '</td>
-                    <td>' . ($patient['address'] ?? '') . '</td>
-                    <td>' . ($patient['sitio'] ?? '') . '</td>
-                    <td>' . ($patient['disease'] ?? '') . '</td>
-                    <td>' . ($patient['contact'] ?? '') . '</td>
-                    <td>' . (!empty($patient['last_checkup']) ? date('Y-m-d', strtotime($patient['last_checkup'])) : '') . '</td>
-                    <td>' . ($patient['medical_history'] ?? '') . '</td>
-                    <td>' . ($patient['added_by'] ?? '') . '</td>
-                    <td>' . (!empty($patient['created_at']) ? date('Y-m-d H:i:s', strtotime($patient['created_at'])) : '') . '</td>
-                    <td>' . ($patient['gender'] ?? '') . '</td>
-                    <td>' . (!empty($patient['updated_at']) ? date('Y-m-d H:i:s', strtotime($patient['updated_at'])) : '') . '</td>
-                    <td>' . ($patient['consultation_type'] ?? '') . '</td>
-                    <td>' . ($patient['civil_status'] ?? '') . '</td>
-                    <td>' . ($patient['occupation'] ?? '') . '</td>
-                    <td>' . ($patient['consent_given'] ? 'Yes' : 'No') . '</td>
-                    <td>' . (!empty($patient['consent_date']) ? date('Y-m-d H:i:s', strtotime($patient['consent_date'])) : '') . '</td>
-                    <td>' . ($patient['height'] ?? '') . '</td>
-                    <td>' . ($patient['weight'] ?? '') . '</td>
-                    <td>' . ($patient['blood_type'] ?? '') . '</td>
-                    <td>' . ($patient['allergies'] ?? '') . '</td>
-                    <td>' . ($patient['medical_history'] ?? '') . '</td>
-                    <td>' . ($patient['current_medications'] ?? '') . '</td>
-                    <td>' . ($patient['family_history'] ?? '') . '</td>
-                    <td>' . (!empty($patient['updated_at']) ? date('Y-m-d H:i:s', strtotime($patient['updated_at'])) : '') . '</td>
-                    <td>' . ($patient['temperature'] ?? '') . '</td>
-                    <td>' . ($patient['blood_pressure'] ?? '') . '</td>
-                    <td>' . ($patient['immunization_record'] ?? '') . '</td>
-                    <td>' . ($patient['chronic_conditions'] ?? '') . '</td>
-                    <td>' . ($patient['patient_type'] ?? '') . '</td>
-                    <td>' . ($patient['user_email'] ?? '') . '</td>
-                    <td>' . ($patient['unique_number'] ?? '') . '</td>
-                </tr>';
+                echo '<tr>';
+                echo '<td>' . $counter++ . '</td>';
+                echo '<td>' . ($patient['id'] ?? '') . '</td>';
+                echo '<td>' . htmlspecialchars($patient['full_name'] ?? '') . '</td>';
+                echo '<td>' . (!empty($patient['date_of_birth']) ? date('Y-m-d', strtotime($patient['date_of_birth'])) : '') . '</td>';
+                echo '<td>' . ($patient['age'] ?? '') . '</td>';
+                echo '<td>' . htmlspecialchars($patient['gender'] ?? '') . '</td>';
+                echo '<td>' . htmlspecialchars($patient['sitio'] ?? '') . '</td>';
+                echo '<td>' . htmlspecialchars($patient['civil_status'] ?? '') . '</td>';
+                echo '<td>' . htmlspecialchars($patient['occupation'] ?? '') . '</td>';
+                echo '<td>' . htmlspecialchars($patient['contact'] ?? '') . '</td>';
+                echo '<td style="font-weight: bold; color: #e74c3c;">' . htmlspecialchars($patient['blood_type'] ?? '') . '</td>';
+                echo '<td>' . ($patient['height'] ?? '') . '</td>';
+                echo '<td>' . ($patient['weight'] ?? '') . '</td>';
+                echo '<td>' . (!empty($patient['last_checkup']) ? date('Y-m-d', strtotime($patient['last_checkup'])) : '') . '</td>';
+                echo '<td>' . ($patient['patient_type'] ?? '') . '</td>';
+                echo '</tr>';
             }
+            
+            echo '</table>';
+            
+            // Summary section
+            echo '<br><br>';
+            echo '<table border="1">';
+            echo '<tr class="header-row">';
+            echo '<td colspan="3" style="text-align: center; padding: 10px;">EXPORT SUMMARY</td>';
+            echo '</tr>';
+            echo '<tr class="info-row">';
+            echo '<td><strong>Export Type:</strong></td>';
+            echo '<td colspan="2">Manual Patient Selection</td>';
+            echo '</tr>';
+            echo '<tr class="info-row">';
+            echo '<td><strong>Selection Criteria:</strong></td>';
+            echo '<td colspan="2">Manually selected by staff member</td>';
+            echo '</tr>';
+            echo '<tr class="info-row">';
+            echo '<td><strong>Data Included:</strong></td>';
+            echo '<td colspan="2">Complete patient health records with medical information</td>';
+            echo '</tr>';
+            echo '</table>';
+            
+            // Footer
+            echo '<br><br>';
+            echo '<table border="0">';
+            echo '<tr>';
+            echo '<td style="font-size: 9pt; color: #666; padding-top: 20px; border-top: 2px solid #12AF03;">';
+            echo '<strong>EXPORT COMPLETE:</strong> This export contains ' . count($patients) . ' patient records selected manually.<br>';
+            echo 'File generated: ' . $filename . '<br>';
+            echo '© ' . date('Y') . ' Barangay Luz Health Center. Confidential patient information.';
+            echo '</td>';
+            echo '</tr>';
+            echo '</table>';
+            
+            echo '</body></html>';
 
-            echo '</tbody></table>';
-
-            // Exit immediately to prevent any other output
+            // Exit immediately
             exit();
 
         } catch (Exception $e) {
@@ -441,7 +655,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['export_manual'])) {
     }
 }
 
-// Handle Excel Export - UPDATED with comprehensive data
+// Handle Excel Export
 if (isset($_GET['export']) && $_GET['export'] == 'excel') {
     try {
         $patientType = isset($_GET['patient_type']) ? $_GET['patient_type'] : 'all';
@@ -473,7 +687,7 @@ if (isset($_GET['export']) && $_GET['export'] == 'excel') {
                 )";
                 $params[] = "%$searchTerm%";
             } else {
-                $$query .= " AND p.full_name LIKE ?";
+                $query .= " AND p.full_name LIKE ?";
                 $params[] = "%$searchTerm%";
             }
         }
@@ -492,128 +706,166 @@ if (isset($_GET['export']) && $_GET['export'] == 'excel') {
         $patients = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
         // Set filename
-        $filename = 'patient_records_export_' . date('Y-m-d');
+        $filename = 'Barangay_Luz_Health_Center_Patient_Records_' . date('Y-m-d');
         if ($patientType == 'registered') {
-            $filename = 'registered_patients_export_' . date('Y-m-d');
+            $filename = 'Registered_Patients_Export_' . date('Y-m-d');
         } elseif ($patientType == 'regular') {
-            $filename = 'regular_patients_export_' . date('Y-m-d');
+            $filename = 'Regular_Patients_Export_' . date('Y-m-d');
         }
         if (!empty($searchTerm)) {
             $filename .= '_search_' . substr($searchTerm, 0, 20);
         }
         $filename .= '.xls';
 
-        // CLEAN OUTPUT - Start fresh output buffer
+        // Clean output
         ob_clean();
 
-        // Output ONLY Excel content - NO HTML headers, NO website content
+        // Output Excel content with professional design
         header("Content-Type: application/vnd.ms-excel");
         header("Content-Disposition: attachment; filename=\"$filename\"");
+        header("Pragma: no-cache");
+        header("Expires: 0");
 
-        // Start table directly without HTML doctype or headers
-        echo '<table border="1">
-            <thead>
-                <tr>
-                    <th>Patient ID</th>
-                    <th>User ID</th>
-                    <th>Full Name</th>
-                    <th>Date of Birth</th>
-                    <th>Age</th>
-                    <th>Address</th>
-                    <th>Sitio</th>
-                    <th>Disease</th>
-                    <th>Contact</th>
-                    <th>Last Checkup</th>
-                    <th>Medical History</th>
-                    <th>Added By</th>
-                    <th>Created At</th>
-                    <th>Gender</th>
-                    <th>Updated At</th>
-                    <th>Consultation Type</th>
-                    <th>Civil Status</th>
-                    <th>Occupation</th>
-                    <th>Consent Given</th>
-                    <th>Consent Date</th>
-                    <th>Height (cm)</th>
-                    <th>Weight (kg)</th>
-                    <th>Blood Type</th>
-                    <th>Allergies</th>
-                    <th>Medical History (detailed)</th>
-                    <th>Current Medications</th>
-                    <th>Family History</th>
-                    <th>Health Updated At</th>
-                    <th>Temperature (°C)</th>
-                    <th>Blood Pressure</th>
-                    <th>Immunization Record</th>
-                    <th>Chronic Conditions</th>
-                    <th>Patient Type</th>
-                    <th>User Email</th>
-                    <th>Unique Number</th>
-                </tr>
-            </thead>
-            <tbody>';
-
+        // Generate professional Excel file with styling
+        echo '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">';
+        echo '<head>';
+        echo '<meta charset="UTF-8">';
+        echo '<style>';
+        echo 'table { border-collapse: collapse; width: 100%; font-family: Calibri, Arial, sans-serif; }';
+        echo 'th { background-color: #3498db; color: white; font-weight: bold; padding: 12px; text-align: left; border: 1px solid #ddd; }';
+        echo 'td { padding: 10px; border: 1px solid #ddd; vertical-align: top; }';
+        echo '.header-row { background-color: #2c3e50; color: white; font-size: 14pt; font-weight: bold; }';
+        echo '.section-header { background-color: #f8f9fa; color: #2c3e50; font-weight: bold; font-size: 12pt; }';
+        echo '.info-row { background-color: #f0f9ff; }';
+        echo '.summary-row { background-color: #e8f5e8; font-weight: bold; }';
+        echo '.date-cell { mso-number-format:"Short Date"; }';
+        echo '</style>';
+        echo '</head>';
+        echo '<body>';
+        
+        // Header section
+        echo '<table border="1">';
+        echo '<tr class="header-row">';
+        echo '<td colspan="12" style="text-align: center; padding: 15px;">BARANGAY LUZ HEALTH CENTER - PATIENT RECORDS EXPORT</td>';
+        echo '</tr>';
+        echo '<tr class="section-header">';
+        echo '<td colspan="12">Export Information</td>';
+        echo '</tr>';
+        echo '<tr class="info-row">';
+        echo '<td colspan="3">Generated On:</td>';
+        echo '<td colspan="3">' . date('F j, Y h:i A') . '</td>';
+        echo '<td colspan="3">Generated By:</td>';
+        echo '<td colspan="3">' . $_SESSION['user']['full_name'] . '</td>';
+        echo '</tr>';
+        echo '<tr class="info-row">';
+        echo '<td colspan="3">Total Records:</td>';
+        echo '<td colspan="3">' . count($patients) . '</td>';
+        echo '<td colspan="3">Export Type:</td>';
+        echo '<td colspan="3">' . ucfirst($patientType) . ' Patients</td>';
+        echo '</tr>';
+        echo '<tr><td colspan="12">&nbsp;</td></tr>';
+        
+        // Column headers
+        echo '<tr>';
+        echo '<th>No.</th>';
+        echo '<th>Patient ID</th>';
+        echo '<th>Full Name</th>';
+        echo '<th>Date of Birth</th>';
+        echo '<th>Age</th>';
+        echo '<th>Gender</th>';
+        echo '<th>Contact</th>';
+        echo '<th>Address</th>';
+        echo '<th>Sitio</th>';
+        echo '<th>Blood Type</th>';
+        echo '<th>Last Checkup</th>';
+        echo '<th>Patient Type</th>';
+        echo '</tr>';
+        
+        // Data rows
+        $counter = 1;
         foreach ($patients as $patient) {
-            echo '<tr>
-                <td>' . ($patient['id'] ?? '') . '</td>
-                <td>' . ($patient['user_id'] ?? '') . '</td>
-                <td>' . ($patient['full_name'] ?? '') . '</td>
-                <td>' . (!empty($patient['date_of_birth']) ? date('Y-m-d', strtotime($patient['date_of_birth'])) : '') . '</td>
-                <td>' . ($patient['age'] ?? '') . '</td>
-                <td>' . ($patient['address'] ?? '') . '</td>
-                <td>' . ($patient['sitio'] ?? '') . '</td>
-                <td>' . ($patient['disease'] ?? '') . '</td>
-                <td>' . ($patient['contact'] ?? '') . '</td>
-                <td>' . (!empty($patient['last_checkup']) ? date('Y-m-d', strtotime($patient['last_checkup'])) : '') . '</td>
-                <td>' . ($patient['medical_history'] ?? '') . '</td>
-                <td>' . ($patient['added_by'] ?? '') . '</td>
-                <td>' . (!empty($patient['created_at']) ? date('Y-m-d H:i:s', strtotime($patient['created_at'])) : '') . '</td>
-                <td>' . ($patient['gender'] ?? '') . '</td>
-                <td>' . (!empty($patient['updated_at']) ? date('Y-m-d H:i:s', strtotime($patient['updated_at'])) : '') . '</td>
-                <td>' . ($patient['consultation_type'] ?? '') . '</td>
-                <td>' . ($patient['civil_status'] ?? '') . '</td>
-                <td>' . ($patient['occupation'] ?? '') . '</td>
-                <td>' . ($patient['consent_given'] ? 'Yes' : 'No') . '</td>
-                <td>' . (!empty($patient['consent_date']) ? date('Y-m-d H:i:s', strtotime($patient['consent_date'])) : '') . '</td>
-                <td>' . ($patient['height'] ?? '') . '</td>
-                <td>' . ($patient['weight'] ?? '') . '</td>
-                <td>' . ($patient['blood_type'] ?? '') . '</td>
-                <td>' . ($patient['allergies'] ?? '') . '</td>
-                <td>' . ($patient['medical_history'] ?? '') . '</td>
-                <td>' . ($patient['current_medications'] ?? '') . '</td>
-                <td>' . ($patient['family_history'] ?? '') . '</td>
-                <td>' . (!empty($patient['updated_at']) ? date('Y-m-d H:i:s', strtotime($patient['updated_at'])) : '') . '</td>
-                <td>' . ($patient['temperature'] ?? '') . '</td>
-                <td>' . ($patient['blood_pressure'] ?? '') . '</td>
-                <td>' . ($patient['immunization_record'] ?? '') . '</td>
-                <td>' . ($patient['chronic_conditions'] ?? '') . '</td>
-                <td>' . ($patient['patient_type'] ?? '') . '</td>
-                <td>' . ($patient['user_email'] ?? '') . '</td>
-                <td>' . ($patient['unique_number'] ?? '') . '</td>
-            </tr>';
+            echo '<tr>';
+            echo '<td>' . $counter++ . '</td>';
+            echo '<td>' . ($patient['id'] ?? '') . '</td>';
+            echo '<td>' . htmlspecialchars($patient['full_name'] ?? '') . '</td>';
+            echo '<td class="date-cell">' . (!empty($patient['date_of_birth']) ? $patient['date_of_birth'] : '') . '</td>';
+            echo '<td>' . ($patient['age'] ?? '') . '</td>';
+            echo '<td>' . htmlspecialchars($patient['gender'] ?? '') . '</td>';
+            echo '<td>' . htmlspecialchars($patient['contact'] ?? '') . '</td>';
+            echo '<td>' . htmlspecialchars($patient['address'] ?? '') . '</td>';
+            echo '<td>' . htmlspecialchars($patient['sitio'] ?? '') . '</td>';
+            echo '<td style="font-weight: bold; color: #e74c3c;">' . htmlspecialchars($patient['blood_type'] ?? 'N/A') . '</td>';
+            echo '<td class="date-cell">' . (!empty($patient['last_checkup']) ? $patient['last_checkup'] : '') . '</td>';
+            echo '<td>' . ($patient['patient_type'] ?? 'Regular') . '</td>';
+            echo '</tr>';
         }
-
-        // If no records found
-        if (empty($patients)) {
-            echo '<tr>
-                <td colspan="35" style="text-align: center; padding: 20px; color: #666;">
-                    No patient records found for the selected filter
-                </td>
-            </tr>';
+        
+        // Summary row
+        echo '<tr class="summary-row">';
+        echo '<td colspan="6">Total Patients:</td>';
+        echo '<td colspan="6">' . count($patients) . '</td>';
+        echo '</tr>';
+        
+        echo '</table>';
+        
+        // Additional detailed information sheet
+        echo '<br><br><br>';
+        echo '<table border="1">';
+        echo '<tr class="header-row">';
+        echo '<td colspan="8" style="text-align: center; padding: 15px;">DETAILED MEDICAL INFORMATION</td>';
+        echo '</tr>';
+        echo '<tr class="section-header">';
+        echo '<td>Patient Name</td>';
+        echo '<td>Height (cm)</td>';
+        echo '<td>Weight (kg)</td>';
+        echo '<td>BMI</td>';
+        echo '<td>Blood Pressure</td>';
+        echo '<td>Temperature</td>';
+        echo '<td>Allergies</td>';
+        echo '<td>Chronic Conditions</td>';
+        echo '</tr>';
+        
+        foreach ($patients as $patient) {
+            $height = $patient['height'] ?? 0;
+            $weight = $patient['weight'] ?? 0;
+            $bmi = ($height > 0 && $weight > 0) ? number_format($weight / (($height/100) * ($height/100)), 2) : 'N/A';
+            
+            echo '<tr>';
+            echo '<td>' . htmlspecialchars($patient['full_name'] ?? '') . '</td>';
+            echo '<td>' . ($height ?: 'N/A') . '</td>';
+            echo '<td>' . ($weight ?: 'N/A') . '</td>';
+            echo '<td>' . $bmi . '</td>';
+            echo '<td>' . htmlspecialchars($patient['blood_pressure'] ?? 'N/A') . '</td>';
+            echo '<td>' . ($patient['temperature'] ? $patient['temperature'] . '°C' : 'N/A') . '</td>';
+            echo '<td>' . htmlspecialchars(substr($patient['allergies'] ?? 'None', 0, 50)) . '</td>';
+            echo '<td>' . htmlspecialchars(substr($patient['chronic_conditions'] ?? 'None', 0, 50)) . '</td>';
+            echo '</tr>';
         }
-
-        echo '</tbody></table>';
+        
+        echo '</table>';
+        
+        // Footer
+        echo '<br><br>';
+        echo '<table border="0">';
+        echo '<tr>';
+        echo '<td colspan="4" style="font-size: 9pt; color: #666; padding-top: 20px; border-top: 1px solid #ddd;">';
+        echo '<strong>CONFIDENTIALITY NOTICE:</strong> This document contains confidential patient health information. ';
+        echo 'Unauthorized disclosure, copying, or distribution is prohibited.<br>';
+        echo '© ' . date('Y') . ' Barangay Luz Health Center. All rights reserved.';
+        echo '</td>';
+        echo '</tr>';
+        echo '</table>';
+        
+        echo '</body></html>';
 
         // Exit immediately to prevent any other output
         exit();
 
     } catch (Exception $e) {
         $error = "Error exporting to Excel: " . $e->getMessage();
-        // Log error but don't output to user to prevent breaking the Excel file
         error_log("Excel Export Error: " . $e->getMessage());
     }
 }
-
 
 // Check for success message from session
 if (isset($_SESSION['success_message'])) {
@@ -646,7 +898,6 @@ if (isset($_GET['delete_patient'])) {
             $values = [];
 
             foreach ($patient as $column => $value) {
-                // Skip id column as we want to use original_id instead
                 if ($column === 'id') {
                     $columns[] = 'original_id';
                     $placeholders[] = '?';
@@ -654,12 +905,10 @@ if (isset($_GET['delete_patient'])) {
                     continue;
                 }
 
-                // Only include columns that exist in deleted_patients table
-                // and are not auto-generated
                 if (
                     in_array($column, $deletedTableColumns) &&
                     !in_array($column, ['id', 'deleted_at'])
-                ) { // Exclude auto columns
+                ) {
                     $columns[] = $column;
                     $placeholders[] = '?';
                     $values[] = $value;
@@ -671,13 +920,7 @@ if (isset($_GET['delete_patient'])) {
             $placeholders[] = '?';
             $values[] = $_SESSION['user']['id'];
 
-            // Note: deleted_at is handled by DEFAULT CURRENT_TIMESTAMP
-
             $insertQuery = "INSERT INTO deleted_patients (" . implode(", ", $columns) . ") VALUES (" . implode(", ", $placeholders) . ")";
-
-            // Debug: Uncomment to see the generated query
-            // error_log("Delete Query: " . $insertQuery);
-            // error_log("Values: " . implode(', ', $values));
 
             // Insert into deleted_patients table
             $stmt = $pdo->prepare($insertQuery);
@@ -705,7 +948,7 @@ if (isset($_GET['delete_patient'])) {
     }
 }
 
-// Handle patient restoration - UPDATED to properly restore with all original data
+// Handle patient restoration
 if (isset($_GET['restore_patient'])) {
     $patientId = $_GET['restore_patient'];
 
@@ -786,10 +1029,6 @@ if (isset($_GET['restore_patient'])) {
                 $placeholders[] = "NOW()";
 
                 $insertQuery = "INSERT INTO sitio1_patients (" . implode(", ", $columns) . ") VALUES (" . implode(", ", $placeholders) . ")";
-
-                // Debug: Uncomment to see the generated query
-                // error_log("Restore Query: " . $insertQuery);
-                // error_log("Values: " . implode(', ', $values));
 
                 // Restore to main patients table with original ID
                 $stmt = $pdo->prepare($insertQuery);
@@ -880,7 +1119,6 @@ if (isset($_GET['convert_to_patient'])) {
                 $userGender = '';
                 if (!empty($user['gender'])) {
                     $userGender = $user['gender'];
-                    // Convert enum values to proper format
                     if ($userGender === 'male')
                         $userGender = 'Male';
                     if ($userGender === 'female')
@@ -920,6 +1158,30 @@ if (isset($_GET['convert_to_patient'])) {
                     $columns[] = "occupation";
                     $placeholders[] = "?";
                     $values[] = $user['occupation'];
+                }
+
+                if ($phicNoExists && isset($user['phic_no'])) {
+                    $columns[] = "phic_no";
+                    $placeholders[] = "?";
+                    $values[] = $user['phic_no'];
+                }
+
+                if ($bhwAssignedExists && isset($user['bhw_assigned'])) {
+                    $columns[] = "bhw_assigned";
+                    $placeholders[] = "?";
+                    $values[] = $user['bhw_assigned'];
+                }
+
+                if ($familyNoExists && isset($user['family_no'])) {
+                    $columns[] = "family_no";
+                    $placeholders[] = "?";
+                    $values[] = $user['family_no'];
+                }
+
+                if ($fourpsMemberExists && isset($user['fourps_member'])) {
+                    $columns[] = "fourps_member";
+                    $placeholders[] = "?";
+                    $values[] = $user['fourps_member'];
                 }
 
                 $insertQuery = "INSERT INTO sitio1_patients (" . implode(", ", $columns) . ") VALUES (" . implode(", ", $placeholders) . ")";
@@ -968,9 +1230,7 @@ $patients = [];
 $searchedUsers = [];
 if (!empty($searchTerm)) {
     try {
-        // Update the search query for unique_number (around line 536)
         if ($searchBy === 'unique_number') {
-            // Search by unique number from sitio1_users table
             $query = "SELECT u.id, u.full_name, u.email, u.date_of_birth, u.age, u.gender,
                              u.civil_status, u.occupation, u.address, u.sitio, u.contact, 
                              u.unique_number, 'user' as type
@@ -982,9 +1242,9 @@ if (!empty($searchTerm)) {
             $stmt->execute(["%$searchTerm%"]);
             $searchedUsers = $stmt->fetchAll(PDO::FETCH_ASSOC);
         } else {
-            // Search by name (default) - using your table structure
             $selectQuery = "SELECT p.id, p.full_name, p.date_of_birth, p.age, 
                                    p.gender, p.sitio, p.civil_status, p.occupation,
+                                   p.phic_no, p.bhw_assigned, p.family_no, p.fourps_member,
                                    e.blood_type, e.height, e.weight, e.temperature, e.blood_pressure
                             FROM sitio1_patients p 
                             LEFT JOIN existing_info_patients e ON p.id = e.patient_id 
@@ -1013,7 +1273,6 @@ try {
     $countQuery = "SELECT COUNT(*) as total FROM sitio1_patients p 
                    WHERE p.added_by = ? AND p.deleted_at IS NULL";
 
-    // Add patient type filter
     if ($patientTypeFilter == 'registered') {
         $countQuery .= " AND p.user_id IS NOT NULL";
     } elseif ($patientTypeFilter == 'regular') {
@@ -1035,13 +1294,16 @@ try {
     $selectQuery = "SELECT 
             p.id,
             p.full_name,
-            -- Prioritize patient table date_of_birth, fallback to user table
             COALESCE(p.date_of_birth, u.date_of_birth) as date_of_birth,
             p.age,
             COALESCE(e.gender, p.gender) as gender,
             p.sitio,
             p.civil_status,
             p.occupation,
+            p.phic_no,
+            p.bhw_assigned,
+            p.family_no,
+            p.fourps_member,
             p.user_id,
             e.blood_type,
             e.height, e.weight, e.temperature, e.blood_pressure,
@@ -1053,7 +1315,7 @@ try {
             u.civil_status as user_civil_status,
             u.occupation as user_occupation,
             u.gender as user_gender,
-            u.date_of_birth as user_date_of_birth, -- Get this separately for debugging
+            u.date_of_birth as user_date_of_birth,
             CASE 
                 WHEN p.user_id IS NOT NULL THEN 'Registered Patient'
                 ELSE 'Regular Patient'
@@ -1063,7 +1325,6 @@ try {
         LEFT JOIN sitio1_users u ON p.user_id = u.id
         WHERE p.added_by = ? AND p.deleted_at IS NULL";
 
-    // Add patient type filter to main query
     if ($patientTypeFilter == 'registered') {
         $selectQuery .= " AND p.user_id IS NOT NULL";
     } elseif ($patientTypeFilter == 'regular') {
@@ -1096,8 +1357,6 @@ try {
 // Get existing health info if patient is selected
 if (!empty($selectedPatientId)) {
     try {
-        // Get basic patient info - FIXED to include user data properly
-        // Update patient details query (around line 643)
         $stmt = $pdo->prepare("SELECT 
             p.*, 
             u.unique_number, 
@@ -1117,18 +1376,19 @@ if (!empty($selectedPatientId)) {
         if (!$patient_details) {
             $error = "Patient not found!";
         } else {
-            // Get health info
             $stmt = $pdo->prepare("SELECT * FROM existing_info_patients WHERE patient_id = ?");
             $stmt->execute([$selectedPatientId]);
             $health_info = $stmt->fetch(PDO::FETCH_ASSOC);
 
-            // If health info exists but doesn't have gender, use the one from patient table
             if ($health_info && empty($health_info['gender']) && !empty($patient_details['gender'])) {
                 $health_info['gender'] = $patient_details['gender'];
             } elseif (!$health_info && !empty($patient_details['gender'])) {
-                // If no health info exists yet, create a temporary array with patient gender
                 $health_info = ['gender' => $patient_details['gender']];
             }
+
+            $stmt = $pdo->prepare("SELECT COUNT(*) as note_count FROM consultation_notes WHERE patient_id = ?");
+            $stmt->execute([$selectedPatientId]);
+            $note_count = $stmt->fetch(PDO::FETCH_ASSOC)['note_count'];
         }
     } catch (PDOException $e) {
         $error = "Error fetching health information: " . $e->getMessage();
@@ -1272,12 +1532,9 @@ if (!empty($selectedPatientId)) {
             font-weight: 600;
         }
 
-        /* Export Button */
         .btn-export {
             background-color: #12AF03;
             color: #ffffffff;
-            /* border: 2px solid #10b981; */
-            opacity: 1;
             border-radius: 30px;
             padding: 15px 25px;
             transition: all 0.3s ease;
@@ -1290,13 +1547,10 @@ if (!empty($selectedPatientId)) {
 
         .btn-export:hover {
             background-color: #12AF03;
-            border-color: #10b981;
-            /* opacity: 0.6; */
             transform: translateY(-2px);
             box-shadow: 0 4px 12px rgba(16, 185, 129, 0.15);
         }
 
-        /* Manual Export Controls */
         .manual-export-controls {
             background-color: #f0f9ff;
             border: 2px solid #3498db;
@@ -1314,7 +1568,6 @@ if (!empty($selectedPatientId)) {
             margin-right: 10px;
         }
 
-        /* Patient Type Filter */
         .patient-type-filter {
             border: 2px solid #55b2f0ff;
             background-color: white;
@@ -1332,12 +1585,10 @@ if (!empty($selectedPatientId)) {
             outline: none;
         }
 
-        /* UPDATED BUTTON STYLES - 100% opacity normally, 60% opacity on hover */
         .btn-view {
             background-color: #3498db;
             color: #ffffffff;
             border: 2px solid #3498db;
-            opacity: 1;
             border-radius: 30px;
             padding: 10px 20px;
             transition: all 0.3s ease;
@@ -1351,7 +1602,6 @@ if (!empty($selectedPatientId)) {
         .btn-view:hover {
             background-color: #50a4dbff;
             border-color: #3498db;
-            opacity: 0.6;
             transform: translateY(-2px);
             box-shadow: 0 4px 12px rgba(52, 152, 219, 0.15);
         }
@@ -1359,7 +1609,6 @@ if (!empty($selectedPatientId)) {
         .btn-archive {
             background-color: #e74c3c;
             color: white;
-            opacity: 1;
             border-radius: 30px;
             padding: 10px 20px;
             transition: all 0.3s ease;
@@ -1372,7 +1621,6 @@ if (!empty($selectedPatientId)) {
 
         .btn-archive:hover {
             background-color: #d86154ff;
-            opacity: 0.6;
             transform: translateY(-2px);
             box-shadow: 0 4px 12px rgba(231, 76, 60, 0.15);
         }
@@ -1381,7 +1629,6 @@ if (!empty($selectedPatientId)) {
             background-color: #2ecc71;
             color: #ffffffff;
             border: 2px solid #2ecc71;
-            opacity: 1;
             border-radius: 50px;
             padding: 17px 25px;
             transition: all 0.3s ease;
@@ -1394,7 +1641,6 @@ if (!empty($selectedPatientId)) {
 
         .btn-add-patient:hover {
             background-color: #42d37eff;
-            opacity: 0.6;
             transform: translateY(-2px);
             box-shadow: 0 4px 12px rgba(46, 204, 113, 0.15);
         }
@@ -1402,7 +1648,6 @@ if (!empty($selectedPatientId)) {
         .btn-primary {
             background-color: #3498db;
             color: #ffffffff;
-            opacity: 1;
             border-radius: 30px;
             padding: 15px 30px;
             transition: all 0.3s ease;
@@ -1417,7 +1662,6 @@ if (!empty($selectedPatientId)) {
         .btn-primary:hover {
             background-color: #55a3d8ff;
             color: #ffffffff;
-            opacity: 0.6;
             transform: translateY(-2px);
             box-shadow: 0 4px 12px rgba(52, 152, 219, 0.15);
         }
@@ -1426,7 +1670,6 @@ if (!empty($selectedPatientId)) {
             background-color: white;
             color: #2ecc71;
             border: 2px solid #2ecc71;
-            opacity: 1;
             border-radius: 8px;
             padding: 12px 24px;
             transition: all 0.3s ease;
@@ -1441,7 +1684,6 @@ if (!empty($selectedPatientId)) {
         .btn-success:hover {
             background-color: #f0fdf4;
             border-color: #2ecc71;
-            opacity: 0.6;
             transform: translateY(-2px);
             box-shadow: 0 4px 12px rgba(46, 204, 113, 0.15);
         }
@@ -1450,7 +1692,6 @@ if (!empty($selectedPatientId)) {
             background-color: white;
             color: #36a9dfff;
             border: 2px solid #36a9dfff;
-            opacity: 1;
             border-radius: 30px;
             padding: 12px 24px;
             transition: all 0.3s ease;
@@ -1465,16 +1706,13 @@ if (!empty($selectedPatientId)) {
         .btn-gray:hover {
             background-color: #f9fafb;
             border-color: #36a9dfff;
-            opacity: 0.6;
             transform: translateY(-2px);
             box-shadow: 0 4px 12px rgba(107, 114, 128, 0.15);
         }
 
-        /* NEW: Print Button - Bigger and Readable */
         .btn-print {
             background-color: #3498db;
             color: #ffffffff;
-            opacity: 1;
             border-radius: 30px;
             padding: 14px 30px;
             transition: all 0.3s ease;
@@ -1491,17 +1729,14 @@ if (!empty($selectedPatientId)) {
         .btn-print:hover {
             background-color: #2563EB;
             border-color: #3498db;
-            opacity: 0.8;
             transform: translateY(-2px);
             box-shadow: 0 4px 12px rgba(52, 152, 219, 0.15);
         }
 
-        /* NEW: Edit Button */
         .btn-edit {
             background-color: white;
             color: #f39c12;
             border: 2px solid #f39c12;
-            opacity: 1;
             border-radius: 8px;
             padding: 14px 28px;
             transition: all 0.3s ease;
@@ -1518,16 +1753,13 @@ if (!empty($selectedPatientId)) {
         .btn-edit:hover {
             background-color: #fef3c7;
             border-color: #f39c12;
-            opacity: 0.6;
             transform: translateY(-2px);
             box-shadow: 0 4px 12px rgba(243, 156, 18, 0.15);
         }
 
-        /* NEW: Save Medical Information Button - UPDATED with warmBlue border */
         .btn-save-medical {
             background-color: #50a4dbff;
             color: #ffffffff;
-            opacity: 1;
             border-radius: 30px;
             padding: 14px 28px;
             transition: all 0.3s ease;
@@ -1544,9 +1776,53 @@ if (!empty($selectedPatientId)) {
 
         .btn-save-medical:hover {
             background-color: #59ace4ff;
-            opacity: 0.6;
             transform: translateY(-2px);
+        }
 
+        .btn-add-note {
+            background-color: #f39c12;
+            color: white;
+            border-radius: 30px;
+            padding: 14px 28px;
+            transition: all 0.3s ease;
+            font-weight: 600;
+            min-height: 60px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            line-height: 2px;
+            width: auto;
+            margin: 8px 0;
+        }
+
+        .btn-add-note:hover {
+            background-color: #f59e1aff;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(243, 156, 18, 0.15);
+        }
+
+        .btn-view-notes {
+            background-color: #9b59b6;
+            color: white;
+            border-radius: 30px;
+            padding: 14px 28px;
+            transition: all 0.3s ease;
+            font-weight: 600;
+            min-height: 60px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            line-height: 2px;
+            width: auto;
+            margin: 8px 0;
+        }
+
+        .btn-view-notes:hover {
+            background-color: #a56cc1;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(155, 89, 182, 0.15);
         }
 
         #viewModal {
@@ -1659,7 +1935,6 @@ if (!empty($selectedPatientId)) {
             cursor: not-allowed;
         }
 
-        /* Enhanced Pagination Styles */
         .pagination-container {
             display: flex;
             justify-content: space-between;
@@ -1686,7 +1961,6 @@ if (!empty($selectedPatientId)) {
             border-radius: 30px;
             background-color: white;
             border: 1px solid #3498db;
-            opacity: 1;
             color: #4b5563;
             font-weight: 500;
             transition: all 0.3s ease;
@@ -1696,7 +1970,6 @@ if (!empty($selectedPatientId)) {
         .pagination-btn:hover {
             background-color: #f0f9ff;
             border-color: #3498db;
-            opacity: 0.6;
             color: #374151;
         }
 
@@ -1704,7 +1977,6 @@ if (!empty($selectedPatientId)) {
             background-color: white;
             color: #3498db;
             border: 2px solid #3498db;
-            opacity: 1;
             font-weight: 600;
         }
 
@@ -1730,7 +2002,6 @@ if (!empty($selectedPatientId)) {
             background-color: white;
             color: #3498db;
             border: 2px solid #3498db;
-            opacity: 1;
             border-radius: 30px;
             padding: 12px 24px;
             transition: all 0.3s ease;
@@ -1745,16 +2016,13 @@ if (!empty($selectedPatientId)) {
         .btn-view-all:hover {
             background-color: #ffffffff;
             border: 2px solid #479ed8ff;
-            opacity: 0.8;
             transform: translateY(-2px);
-
         }
 
         .btn-back-to-pagination {
             background-color: white;
             color: #3498db;
             border: 2px solid #3498db;
-            opacity: 1;
             border-radius: 8px;
             padding: 12px 24px;
             transition: all 0.3s ease;
@@ -1770,12 +2038,10 @@ if (!empty($selectedPatientId)) {
         .btn-back-to-pagination:hover {
             background-color: #f0f9ff;
             border-color: #3498db;
-            opacity: 0.6;
             transform: translateY(-2px);
             box-shadow: 0 4px 12px rgba(52, 152, 219, 0.15);
         }
 
-        /* Scrollable table for all records */
         .scrollable-table-container {
             max-height: 70vh;
             overflow-y: auto;
@@ -1788,7 +2054,6 @@ if (!empty($selectedPatientId)) {
             margin-bottom: 0;
         }
 
-        /* Form validation styles */
         .field-empty {
             background-color: #fef2f2 !important;
             border-color: #fecaca !important;
@@ -1803,7 +2068,6 @@ if (!empty($selectedPatientId)) {
             background-color: #f9fafb !important;
             color: #9ca3af !important;
             border-color: #e5e7eb !important;
-            opacity: 1;
             cursor: not-allowed !important;
             transform: none !important;
             box-shadow: none !important;
@@ -1813,12 +2077,10 @@ if (!empty($selectedPatientId)) {
             background-color: #f9fafb !important;
             color: #9ca3af !important;
             border-color: #e5e7eb !important;
-            opacity: 1;
             transform: none !important;
             box-shadow: none !important;
         }
 
-        /* Enhanced Form Input Styles for Add Patient Modal - WITH STROKE EFFECT */
         .form-input-modal {
             border-radius: 8px !important;
             padding: 16px 20px !important;
@@ -1891,7 +2153,6 @@ if (!empty($selectedPatientId)) {
             font-size: 14px;
         }
 
-        /* UPDATED: Changed form section title icons */
         .form-section-title-modal {
             font-size: 1.25rem;
             font-weight: 700;
@@ -1909,14 +2170,6 @@ if (!empty($selectedPatientId)) {
             color: #3498db;
         }
 
-        .form-checkbox-modal {
-            width: 20px;
-            height: 20px;
-            border-radius: 4px;
-            border: 2px solid #e2e8f0;
-        }
-
-        /* Add Patient Modal Specific Styles */
         #addPatientModal {
             backdrop-filter: blur(5px);
             transition: opacity 0.3s ease;
@@ -1940,11 +2193,6 @@ if (!empty($selectedPatientId)) {
             gap: 1.25rem !important;
         }
 
-        .modal-field-spacing {
-            margin-bottom: 1.25rem;
-        }
-
-        /* Active Tab Styling */
         .tab-btn {
             position: relative;
             transition: all 0.3s ease;
@@ -1961,7 +2209,6 @@ if (!empty($selectedPatientId)) {
             background-color: #f8fafc;
         }
 
-        /* UPDATED Search box styling - Consistent height and width with warmBlue border */
         .search-input {
             border: 2px solid #55b2f0ff !important;
             background-color: white !important;
@@ -2003,7 +2250,6 @@ if (!empty($selectedPatientId)) {
             box-shadow: 0 0 0 3px #8acdfaff;
         }
 
-        /* Search icon position */
         .search-icon-container {
             position: absolute;
             left: 20px;
@@ -2013,8 +2259,6 @@ if (!empty($selectedPatientId)) {
             pointer-events: none;
         }
 
-
-        /* Table styling */
         .patient-table th {
             background-color: #f0f9ff;
             color: #2c3e50;
@@ -2025,21 +2269,18 @@ if (!empty($selectedPatientId)) {
             background-color: #f8fafc;
         }
 
-        /* Main container styling */
         .main-container {
             background-color: white;
             border: 1px solid #f0f9ff;
             box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
         }
 
-        /* Section backgrounds */
         .section-bg {
             background-color: white;
             border: 1px solid #f0f9ff;
             border-radius: 12px;
         }
 
-        /* Success/Error message styling */
         .alert-success {
             background-color: #f0fdf4;
             border: 2px solid #bbf7d0;
@@ -2052,7 +2293,6 @@ if (!empty($selectedPatientId)) {
             color: #b91c1c;
         }
 
-        /* Search form layout */
         .search-form-container {
             display: flex;
             flex-direction: column;
@@ -2079,12 +2319,10 @@ if (!empty($selectedPatientId)) {
             }
         }
 
-        /* Ensure opacity is visible */
         * {
             --tw-border-opacity: 1 !important;
         }
 
-        /* Fix for browsers that don't support opacity */
         .btn-success,
         .btn-print,
         .btn-edit,
@@ -2095,7 +2333,6 @@ if (!empty($selectedPatientId)) {
             border-style: solid !important;
         }
 
-        /* Hover state opacity */
         .btn-archive:hover,
         .btn-success:hover,
         .btn-edit:hover,
@@ -2105,224 +2342,6 @@ if (!empty($selectedPatientId)) {
             border-color: inherit !important;
         }
 
-        /* Add these styles to your existing CSS in existing_info_patients.php */
-
-        /* Success modal specific styles */
-        .success-modal-bg {
-            background: rgba(0, 0, 0, 0.7);
-            backdrop-filter: blur(5px);
-        }
-
-        /* Gradient backgrounds */
-        .bg-gradient-success {
-            background: linear-gradient(135deg, #d4edda 0%, #f0fdf4 100%);
-        }
-
-        .bg-gradient-blue {
-            background: linear-gradient(135deg, #dbeafe 0%, #f0f9ff 100%);
-        }
-
-        /* Animation keyframes */
-        @keyframes fadeIn {
-            from {
-                opacity: 0;
-            }
-
-            to {
-                opacity: 1;
-            }
-        }
-
-        @keyframes scaleIn {
-            from {
-                transform: scale(0.95);
-                opacity: 0;
-            }
-
-            to {
-                transform: scale(1);
-                opacity: 1;
-            }
-        }
-
-        @keyframes pulse {
-            0% {
-                transform: scale(1);
-            }
-
-            50% {
-                transform: scale(1.05);
-            }
-
-            100% {
-                transform: scale(1);
-            }
-        }
-
-        @keyframes shake {
-
-            0%,
-            100% {
-                transform: translateX(0);
-            }
-
-            25% {
-                transform: translateX(-5px);
-            }
-
-            75% {
-                transform: translateX(5px);
-            }
-        }
-
-        .animate-fadeIn {
-            animation: fadeIn 0.3s ease-out;
-        }
-
-        .animate-scaleIn {
-            animation: scaleIn 0.3s ease-out;
-        }
-
-        .pulse-animation {
-            animation: pulse 2s ease-in-out;
-        }
-
-        .shake-animation {
-            animation: shake 0.5s ease-in-out;
-        }
-
-        /* Success Modal Button Styles */
-        #successModal {
-            background-color: white;
-            color: #3498db;
-            border: 2px solid #3498db;
-            opacity: 1;
-            border-radius: 8px;
-            padding: 10px 20px;
-            transition: all 0.3s ease;
-            font-weight: 500;
-            min-height: 44px;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 14px;
-        }
-
-        #successModal {
-            background-color: #f0f9ff;
-            border-color: #3498db;
-            opacity: 0.6;
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(52, 152, 219, 0.15);
-        }
-
-        #successModal .btn-primary {
-            background-color: white;
-            color: #2ecc71;
-            border: 2px solid #2ecc71;
-            opacity: 1;
-            border-radius: 30px;
-            padding: 10px 24px;
-            transition: all 0.3s ease;
-            font-weight: 500;
-            min-height: 44px;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 14px;
-        }
-
-        #successModal .btn-primary:hover {
-
-            border-color: #2ecc71;
-            opacity: 0.6;
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(46, 204, 113, 0.15);
-        }
-
-        /* Ensure z-index for modal */
-        #successModal {
-            z-index: 9999;
-        }
-
-        /* Smooth transitions for all modals */
-        .modal-transition {
-            transition: all 0.3s ease;
-        }
-
-        /* UPDATED: Added opacity support for borders */
-        .btn-view,
-        .btn-archive,
-        .btn-primary,
-        .btn-success,
-        .btn-gray,
-        .btn-print,
-        .btn-edit,
-        .btn-save-medical,
-        .btn-view-all,
-        .btn-back-to-pagination,
-        .pagination-btn {
-            position: relative;
-        }
-
-        .btn-view::after,
-        .btn-archive::after,
-        .btn-primary::after,
-        .btn-success::after,
-        .btn-gray::after,
-        .btn-print::after,
-        .btn-edit::after,
-        .btn-view-all::after,
-        .btn-back-to-pagination::after,
-        {
-        content: '';
-        position: absolute;
-        top: -2px;
-        left: -2px;
-        right: -2px;
-        bottom: -2px;
-        border-radius: 8px;
-        pointer-events: none;
-        transition: opacity 0.3s ease;
-        }
-
-        .btn-add-patient::after {
-            border: 2px solid #2ecc71;
-            opacity: 1;
-        }
-
-        .btn-success::after {
-            border: 2px solid #2ecc71;
-            opacity: 1;
-        }
-
-        .btn-edit::after {
-            border: 2px solid #f39c12;
-            opacity: 1;
-        }
-
-        .btn-back-to-pagination::after {
-            border: 2px solid #3498db;
-            opacity: 1;
-        }
-
-        .pagination-btn::after {
-            border: 1px solid #3498db;
-            opacity: 1;
-        }
-
-        .btn-view:hover::after,
-        .btn-archive:hover::after,
-        .btn-add-patient:hover::after,
-        .btn-success:hover::after,
-        .btn-edit:hover::after,
-        .btn-view-all:hover::after,
-        .btn-back-to-pagination:hover::after,
-        .pagination-btn:hover::after {
-            opacity: 0.6;
-        }
-
-        /* Export button group */
         .export-options {
             display: none;
             position: absolute;
@@ -2339,7 +2358,6 @@ if (!empty($selectedPatientId)) {
 
         .export-options.show {
             display: block;
-            animation: fadeIn 0.2s ease;
         }
 
         .export-option {
@@ -2370,13 +2388,11 @@ if (!empty($selectedPatientId)) {
             width: 20px;
         }
 
-        /* Export button wrapper */
         .export-btn-wrapper {
             position: relative;
             display: inline-block;
         }
 
-        /* Checkbox styling */
         .patient-checkbox {
             width: 20px;
             height: 20px;
@@ -2398,6 +2414,524 @@ if (!empty($selectedPatientId)) {
             border-radius: 8px;
             border: 1px solid #e2e8f0;
         }
+
+        .consultation-note-item {
+            background-color: white;
+            border-left: 4px solid #3498db;
+            margin-bottom: 1rem;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            transition: transform 0.2s ease;
+        }
+
+        .consultation-note-item:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+        }
+
+        .note-badge {
+            background-color: #e74c3c;
+            color: white;
+            font-size: 12px;
+            font-weight: 600;
+            padding: 2px 8px;
+            border-radius: 12px;
+            margin-left: 8px;
+            vertical-align: middle;
+        }
+
+        .consultation-note-date {
+            font-size: 12px;
+            color: #6b7280;
+            margin-bottom: 5px;
+        }
+
+        .consultation-note-content {
+            color: #374151;
+            line-height: 1.5;
+            margin: 10px 0;
+        }
+
+        .consultation-note-next-date {
+            font-size: 12px;
+            color: #10b981;
+            margin-top: 8px;
+            padding: 4px 8px;
+            background-color: #d1fae5;
+            border-radius: 4px;
+            display: inline-block;
+        }
+
+        .loading-notes {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 2rem;
+        }
+
+        .loading-spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #3498db;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        #consultationNoteModal input[type="date"],
+        #consultationNoteModal textarea {
+            border: 2px solid #3498db;
+            border-radius: 8px;
+            padding: 12px;
+            width: 100%;
+            font-size: 16px;
+        }
+
+        #consultationNoteModal input[type="date"]:focus,
+        #consultationNoteModal textarea:focus {
+            outline: none;
+            border-color: #2563EB;
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+        }
+        
+        .consultation-note-item {
+            background-color: white;
+            border-left: 4px solid #3498db;
+            margin-bottom: 1rem;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            transition: transform 0.2s ease;
+        }
+
+        .consultation-note-item:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+        }
+
+        .note-preview {
+            color: #666;
+            line-height: 1.5;
+            margin: 10px 0;
+            font-size: 14px;
+            max-height: 60px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            display: -webkit-box;
+            -webkit-line-clamp: 3;
+            -webkit-box-orient: vertical;
+        }
+
+        .note-actions {
+            display: flex;
+            gap: 8px;
+            margin-top: 10px;
+        }
+
+        .note-action-btn {
+            padding: 4px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 500;
+            cursor: pointer;
+            border: 1px solid transparent;
+            transition: all 0.2s ease;
+        }
+
+        .note-action-btn.view {
+            background-color: #e0f2fe;
+            color: #0369a1;
+            border-color: #bae6fd;
+        }
+
+        .note-action-btn.view:hover {
+            background-color: #bae6fd;
+        }
+
+        .note-action-btn.use {
+            background-color: #d1fae5;
+            color: #065f46;
+            border-color: #a7f3d0;
+        }
+
+        .note-action-btn.use:hover {
+            background-color: #a7f3d0;
+        }
+
+        .note-meta {
+            font-size: 12px;
+            color: #6b7280;
+            display: flex;
+            justify-content: space-between;
+            margin-top: 8px;
+            padding-top: 8px;
+            border-top: 1px solid #f3f4f6;
+        }
+        
+        /* Consultation Notes Section Styles */
+        .consultation-notes-section {
+            margin-bottom: 2rem;
+            background: white;
+            border-radius: 12px;
+            border: 2px solid #f0f9ff;
+            overflow: hidden;
+        }
+
+        .consultation-notes-header {
+            background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+            padding: 1.5rem 2rem;
+            border-bottom: 2px solid #bae6fd;
+        }
+
+        .notes-count-badge {
+            background: #3498db;
+            color: white;
+            font-size: 0.75rem;
+            font-weight: 600;
+            padding: 0.25rem 0.75rem;
+            border-radius: 1rem;
+            margin-left: 0.5rem;
+        }
+
+        .notes-history-container {
+            max-height: 400px;
+            overflow-y: auto;
+            padding: 1.5rem;
+        }
+
+        .note-item {
+            background: white;
+            border: 1px solid #e2e8f0;
+            border-left: 4px solid #3498db;
+            border-radius: 8px;
+            padding: 1.25rem;
+            margin-bottom: 1rem;
+            transition: all 0.3s ease;
+        }
+
+        .note-item:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(52, 152, 219, 0.1);
+            border-color: #3498db;
+        }
+
+        .note-date {
+            color: #2c3e50;
+            font-weight: 600;
+            font-size: 1rem;
+        }
+
+        .note-next-date {
+            color: #10b981;
+            font-size: 0.875rem;
+            background: #d1fae5;
+            padding: 0.25rem 0.75rem;
+            border-radius: 0.375rem;
+            display: inline-flex;
+            align-items: center;
+            margin-top: 0.5rem;
+        }
+
+        .note-preview {
+            color: #4b5563;
+            line-height: 1.5;
+            margin: 0.75rem 0;
+            font-size: 0.875rem;
+            max-height: 4.5em;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .note-meta {
+            font-size: 0.75rem;
+            color: #6b7280;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 1rem;
+            padding-top: 1rem;
+            border-top: 1px solid #f3f4f6;
+        }
+
+        .note-actions {
+            display: flex;
+            gap: 0.5rem;
+            margin-top: 1rem;
+        }
+
+        .btn-view-note {
+            background: #e0f2fe;
+            color: #0369a1;
+            border: 1px solid #bae6fd;
+            padding: 0.375rem 0.75rem;
+            border-radius: 0.375rem;
+            font-size: 0.75rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-view-note:hover {
+            background: #bae6fd;
+        }
+
+        .btn-use-note {
+            background: #d1fae5;
+            color: #065f46;
+            border: 1px solid #a7f3d0;
+            padding: 0.375rem 0.75rem;
+            border-radius: 0.375rem;
+            font-size: 0.75rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-use-note:hover {
+            background: #a7f3d0;
+        }
+
+        /* Loading spinner for notes */
+        .loading-notes {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 2rem;
+        }
+
+        .loading-spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #3498db;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .btn-pdf {
+            background-color: #e74c3c;
+            color: white;
+            border-radius: 30px;
+            padding: 15px 25px;
+            transition: all 0.3s ease;
+            font-weight: 500;
+            min-height: 45px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .btn-pdf:hover {
+            background-color: #c0392b;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(231, 76, 60, 0.15);
+        }
+        /* Horizontal Notes Display */
+.horizontal-notes-container {
+    display: flex;
+    overflow-x: auto;
+    padding: 1rem 0.5rem;
+    gap: 1rem;
+    scrollbar-width: thin;
+    scrollbar-color: #3498db #f0f9ff;
+}
+
+.horizontal-notes-container::-webkit-scrollbar {
+    height: 8px;
+}
+
+.horizontal-notes-container::-webkit-scrollbar-track {
+    background: #f0f9ff;
+    border-radius: 4px;
+}
+
+.horizontal-notes-container::-webkit-scrollbar-thumb {
+    background: #3498db;
+    border-radius: 4px;
+}
+
+.note-card {
+    flex: 0 0 300px;
+    background: white;
+    border-radius: 12px;
+    border: 1px solid #e2e8f0;
+    padding: 1.5rem;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    transition: all 0.3s ease;
+    display: flex;
+    flex-direction: column;
+    min-height: 250px;
+    max-height: 350px;
+}
+
+.note-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 8px 20px rgba(52, 152, 219, 0.15);
+    border-color: #3498db;
+}
+
+.note-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 1rem;
+    border-bottom: 2px solid #f0f9ff;
+    padding-bottom: 0.75rem;
+}
+
+.note-date {
+    font-weight: 600;
+    color: #2c3e50;
+    font-size: 1rem;
+}
+
+.note-badge {
+    background: #3498db;
+    color: white;
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 0.25rem 0.75rem;
+    border-radius: 1rem;
+}
+
+.note-content {
+    flex: 1;
+    overflow: hidden;
+    position: relative;
+    margin-bottom: 1rem;
+}
+
+.note-text {
+    color: #4b5563;
+    line-height: 1.5;
+    font-size: 0.875rem;
+    max-height: 180px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: -webkit-box;
+    -webkit-line-clamp: 8;
+    -webkit-box-orient: vertical;
+}
+
+.note-actions {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: auto;
+}
+
+.btn-view-note {
+    flex: 1;
+    background: #e0f2fe;
+    color: #0369a1;
+    border: 1px solid #bae6fd;
+    padding: 0.5rem;
+    border-radius: 0.5rem;
+    font-size: 0.75rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-align: center;
+}
+
+.btn-view-note:hover {
+    background: #bae6fd;
+}
+
+.btn-use-note {
+    flex: 1;
+    background: #d1fae5;
+    color: #065f46;
+    border: 1px solid #a7f3d0;
+    padding: 0.5rem;
+    border-radius: 0.5rem;
+    font-size: 0.75rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-align: center;
+}
+
+.btn-use-note:hover {
+    background: #a7f3d0;
+}
+
+/* Empty State */
+.empty-notes {
+    text-align: center;
+    padding: 3rem;
+    background: #f8fafc;
+    border-radius: 12px;
+    border: 2px dashed #e2e8f0;
+    width: 100%;
+}
+
+.empty-notes i {
+    font-size: 3rem;
+    color: #cbd5e1;
+    margin-bottom: 1rem;
+}
+
+.empty-notes p {
+    color: #64748b;
+    margin-bottom: 1.5rem;
+}
+.btn-pdf {
+    background-color: #e74c3c;
+    color: white;
+    border-radius: 30px;
+    padding: 15px 25px;
+    transition: all 0.3s ease;
+    font-weight: 500;
+    min-height: 45px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid #e74c3c;
+}
+
+.btn-pdf:hover {
+    background-color: #c0392b;
+    border-color: #c0392b;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(231, 76, 60, 0.15);
+}
+
+.manual-export-controls {
+    background: linear-gradient(135deg, #f0f9ff 0%, #e0f7ff 100%);
+    border: 2px solid #3498db;
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 25px;
+    box-shadow: 0 4px 15px rgba(52, 152, 219, 0.1);
+}
+
+.manual-export-form {
+    background: white;
+    border-radius: 10px;
+    padding: 20px;
+    border: 1px solid #e2e8f0;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+}
+
+.selected-count-display {
+    background-color: #d1fae5;
+    color: #065f46;
+    padding: 8px 16px;
+    border-radius: 20px;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    border: 2px solid #10b981;
+}
     </style>
 </head>
 
@@ -2445,11 +2979,14 @@ if (!empty($selectedPatientId)) {
                                 <i class="fas fa-download mr-2"></i>Export
                             </button>
                             <div id="exportOptions" class="export-options">
-                                <button type="button" onclick="exportAllRecords()" class="export-option">
-                                    <i class="fas fa-database mr-2"></i>All Records
+                                <button type="button" onclick="exportAllRecords('excel')" class="export-option">
+                                    <i class="fas fa-file-excel mr-2 text-success"></i>Excel - All Records
+                                </button>
+                                <button type="button" onclick="exportAllRecords('pdf')" class="export-option">
+                                    <i class="fas fa-file-pdf mr-2 text-danger"></i>PDF - All Records
                                 </button>
                                 <button type="button" onclick="enableManualSelection()" class="export-option">
-                                    <i class="fas fa-user-check mr-2"></i>Manual by Patient
+                                    <i class="fas fa-user-check mr-2 text-primary"></i>Manual by Patient
                                 </button>
                             </div>
                         </div>
@@ -2460,44 +2997,41 @@ if (!empty($selectedPatientId)) {
                 </div>
 
                 <!-- Manual Export Controls (Hidden by default) -->
-                <?php if ($manualSelectMode): ?>
-                    <div class="manual-export-controls mb-6">
-                        <form method="POST" action="" id="manualExportForm" class="manual-export-form">
-                            <div class="flex flex-wrap items-center justify-between gap-4">
-                                <div>
-                                    <h4 class="text-lg font-semibold text-secondary mb-2">
-                                        <i class="fas fa-user-check mr-2 text-primary"></i>
-                                        Select Patients for Export
-                                    </h4>
-                                    <p class="text-sm text-gray-600">Check the patients you want to include in the export
-                                    </p>
-                                </div>
-                                <div class="flex items-center gap-3">
-                                    <div class="flex items-center">
-                                        <input type="checkbox" id="selectAllPatients"
-                                            class="patient-checkbox select-all-checkbox" onchange="toggleAllPatients(this)">
-                                        <label for="selectAllPatients" class="ml-2 text-sm font-medium text-gray-700">Select
-                                            All</label>
-                                    </div>
-                                    <button type="button" onclick="disableManualSelection()" class="btn-gray px-4 py-2">
-                                        <i class="fas fa-times mr-2"></i>Cancel
-                                    </button>
-                                    <button type="submit" name="export_manual" class="btn-export px-4 py-2">
-                                        <i class="fas fa-download mr-2"></i>Export Selected
-                                    </button>
-                                </div>
-                            </div>
-                            <div class="mt-4">
-                                <p class="text-sm text-gray-500">
-                                    <i class="fas fa-info-circle mr-1"></i>
-                                    Selected: <span id="selectedCount">0</span> patients
-                                </p>
-                            </div>
-                        </form>
+<?php if ($manualSelectMode): ?>
+    <div class="manual-export-controls mb-6">
+        <form method="POST" action="" id="manualExportForm" class="manual-export-form">
+            <div class="flex flex-wrap items-center justify-between gap-4">
+                <div>
+                    <h4 class="text-lg font-semibold text-secondary mb-2">
+                        <i class="fas fa-user-check mr-2 text-primary"></i>
+                        Select Patients for Export
+                    </h4>
+                    <p class="text-sm text-gray-600">Check the patients you want to include in the export.
+                    <br><span class="text-primary font-medium">Selected: <span id="selectedCount">0</span> patients</span></p>
+                </div>
+                <div class="flex items-center gap-3">
+                    <div class="flex items-center">
+                        <input type="checkbox" id="selectAllPatients"
+                            class="patient-checkbox select-all-checkbox" onchange="toggleAllPatients(this)">
+                        <label for="selectAllPatients" class="ml-2 text-sm font-medium text-gray-700">Select
+                            All</label>
                     </div>
-                <?php endif; ?>
+                    <button type="button" onclick="disableManualSelection()" class="btn-gray px-4 py-2">
+                        <i class="fas fa-times mr-2"></i>Cancel
+                    </button>
+                    <button type="button" onclick="confirmManualExport('excel')" class="btn-export px-4 py-2">
+                        <i class="fas fa-file-excel mr-2"></i>Export as Excel
+                    </button>
+                    <button type="button" onclick="confirmManualExport('pdf')" class="btn-pdf px-4 py-2">
+                        <i class="fas fa-file-pdf mr-2"></i>Export as PDF
+                    </button>
+                </div>
+            </div>
+        </form>
+    </div>
+<?php endif; ?>
 
-                <!-- UPDATED Search Form with warmBlue border and separated icon -->
+                <!-- Search Form -->
                 <form method="get" action="" class="mb-6 section-bg p-6">
                     <input type="hidden" name="tab" value="patients-tab">
                     <?php if ($viewAll): ?>
@@ -2508,17 +3042,7 @@ if (!empty($selectedPatientId)) {
                     <?php endif; ?>
 
                     <div class="search-form-container">
-                        <!-- Search By Field -->
-                        <div class="search-field-group">
-                            <label for="search_by" class="block text-gray-700 mb-2 font-medium">Search By</label>
-                            <div class="relative">
-                                <select id="search_by" name="search_by" class="search-select">
-                                    <option value="name" <?= $searchBy === 'name' ? 'selected' : '' ?>>Name</option>
-                                    <option value="unique_number" <?= $searchBy === 'unique_number' ? 'selected' : '' ?>>
-                                        Unique Number</option>
-                                </select>
-                            </div>
-                        </div>
+                        
 
                         <!-- Search Term Field with icon inside input -->
                         <div class="search-field-group flex-grow">
@@ -2527,12 +3051,10 @@ if (!empty($selectedPatientId)) {
                             </label>
 
                             <div class="relative">
-                                <!-- Search Icon -->
                                 <i class="fa-solid fa-magnifying-glass
                                           absolute left-7 top-1/2 -translate-y-1/2
                                           text-gray-500 pointer-events-none z-10"></i>
 
-                                <!-- Input -->
                                 <input type="text" id="search" name="search"
                                     value="<?= htmlspecialchars($searchTerm) ?>"
                                     placeholder="<?= $searchBy === 'unique_number' ? 'Enter Patients Name...' : 'Search patients by name...' ?>"
@@ -2544,12 +3066,10 @@ if (!empty($selectedPatientId)) {
                         <!-- Search Buttons -->
                         <div class="search-field-group flex flex-col sm:flex-row gap-2 mt-2 sm:mt-0">
                             <?php if (empty($searchTerm)): ?>
-                                <!-- Show Search button ONLY when there is NO search term -->
                                 <button type="submit" class="btn-primary min-w-[120px]">
                                     <i class="fas fa-search mr-2"></i> Search
                                 </button>
                             <?php else: ?>
-                                <!-- Show Clear button ONLY when search term EXISTS -->
                                 <a href="existing_info_patients.php<?= $manualSelectMode ? '?manual_select=true&tab=patients-tab' : '?tab=patients-tab' ?>"
                                     class="btn-gray min-w-[120px] text-center">
                                     <i class="fas fa-times mr-2"></i> Clear
@@ -2594,7 +3114,6 @@ if (!empty($selectedPatientId)) {
                                                     <?php if ($occupationExists): ?>
                                                         <th>Occupation</th>
                                                     <?php endif; ?>
-                                                    <th>Blood Type</th>
                                                     <th>Type</th>
                                                     <th>Actions</th>
                                                 </tr>
@@ -2606,7 +3125,6 @@ if (!empty($selectedPatientId)) {
                                                         <td><?= htmlspecialchars($patient['full_name']) ?></td>
                                                         <td>
                                                             <?php
-                                                            // Display date of birth properly
                                                             if (!empty($patient['date_of_birth'])) {
                                                                 echo date('M d, Y', strtotime($patient['date_of_birth']));
                                                             } else {
@@ -2617,7 +3135,6 @@ if (!empty($selectedPatientId)) {
                                                         <td><?= $patient['age'] ?? 'N/A' ?></td>
                                                         <td>
                                                             <?php
-                                                            // Display gender properly
                                                             if (!empty($patient['gender'])) {
                                                                 if ($patient['gender'] === 'male')
                                                                     echo 'Male';
@@ -2639,9 +3156,6 @@ if (!empty($selectedPatientId)) {
                                                         <?php if ($occupationExists): ?>
                                                             <td><?= htmlspecialchars($patient['occupation'] ?? 'N/A') ?></td>
                                                         <?php endif; ?>
-                                                        <td class="font-semibold text-primary">
-                                                            <?= htmlspecialchars($patient['blood_type'] ?? 'N/A') ?>
-                                                        </td>
                                                         <td>
                                                             <span class="text-gray-500">Regular Patient</span>
                                                         </td>
@@ -2672,60 +3186,120 @@ if (!empty($selectedPatientId)) {
                                         <table class="patient-table">
                                             <thead>
                                                 <tr>
+                                                    <?php if ($manualSelectMode): ?>
+                                                        <th class="checkbox-column">
+                                                            <input type="checkbox" id="selectAll" class="patient-checkbox"
+                                                                onchange="toggleAllSelection(this)">
+                                                        </th>
+                                                    <?php endif; ?>
                                                     <th>ID</th>
                                                     <th>Name</th>
-                                                    <th>Email</th>
                                                     <th>Date of Birth</th>
                                                     <th>Age</th>
                                                     <th>Gender</th>
-                                                    <th>Occupation</th>
-                                                    <th>Sitio</th>
-                                                    <th>Contact</th>
+                                                    <?php if ($sitioExists): ?>
+                                                        <th>Sitio</th>
+                                                    <?php endif; ?>
+                                                    <?php if ($civilStatusExists): ?>
+                                                        <th>Civil Status</th>
+                                                    <?php endif; ?>
+                                                    <?php if ($occupationExists): ?>
+                                                        <th>Occupation</th>
+                                                    <?php endif; ?>
+                                                    <th>Type</th>
                                                     <th>Actions</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
-                                                <?php foreach ($searchedUsers as $index => $user): ?>
+                                                <?php foreach ($allPatients as $index => $patient): ?>
                                                     <tr>
+                                                        <?php if ($manualSelectMode): ?>
+                                                            <td class="checkbox-column">
+                                                                <input type="checkbox" name="selected_patients[]"
+                                                                    value="<?= $patient['id'] ?>"
+                                                                    class="patient-checkbox patient-select"
+                                                                    onchange="updateSelectedCount()">
+                                                            </td>
+                                                        <?php endif; ?>
                                                         <td class="patient-id"><?= $index + 1 ?></td>
-                                                        <td><?= htmlspecialchars($user['full_name']) ?></td>
-                                                        <td><?= htmlspecialchars($user['email']) ?></td>
+                                                        <td><?= htmlspecialchars($patient['full_name']) ?></td>
                                                         <td>
                                                             <?php
-                                                            // Display date of birth from user table
-                                                            if (!empty($user['date_of_birth'])) {
-                                                                echo date('M d, Y', strtotime($user['date_of_birth']));
+                                                            if (!empty($patient['date_of_birth'])) {
+                                                                echo date('M d, Y', strtotime($patient['date_of_birth']));
                                                             } else {
                                                                 echo 'N/A';
                                                             }
                                                             ?>
                                                         </td>
-                                                        <td><?= $user['age'] ?? 'N/A' ?></td>
+                                                        <td><?= $patient['age'] ?? 'N/A' ?></td>
                                                         <td>
                                                             <?php
-                                                            // Display gender properly from user table
-                                                            if (!empty($user['gender'])) {
-                                                                if ($user['gender'] === 'male')
-                                                                    echo 'Male';
-                                                                elseif ($user['gender'] === 'female')
-                                                                    echo 'Female';
-                                                                else
-                                                                    echo htmlspecialchars($user['gender']);
+                                                            if (!empty($patient['gender'])) {
+                                                                echo htmlspecialchars($patient['gender']);
                                                             } else {
                                                                 echo 'N/A';
                                                             }
                                                             ?>
                                                         </td>
-                                                        <td><?= htmlspecialchars($user['occupation'] ?? 'N/A') ?></td>
-                                                        <td><?= htmlspecialchars($user['sitio'] ?? 'N/A') ?></td>
-                                                        <td><?= htmlspecialchars($user['contact'] ?? 'N/A') ?></td>
-
+                                                        <?php if ($sitioExists): ?>
+                                                            <td>
+                                                                <?php
+                                                                if (!empty($patient['sitio'])) {
+                                                                    echo htmlspecialchars($patient['sitio']);
+                                                                } elseif (!empty($patient['user_sitio'])) {
+                                                                    echo htmlspecialchars($patient['user_sitio']);
+                                                                } else {
+                                                                    echo 'N/A';
+                                                                }
+                                                                ?>
+                                                            </td>
+                                                        <?php endif; ?>
+                                                        <?php if ($civilStatusExists): ?>
+                                                            <td>
+                                                                <?php
+                                                                if (!empty($patient['civil_status'])) {
+                                                                    echo htmlspecialchars($patient['civil_status']);
+                                                                } elseif (!empty($patient['user_civil_status'])) {
+                                                                    echo htmlspecialchars($patient['user_civil_status']);
+                                                                } else {
+                                                                    echo 'N/A';
+                                                                }
+                                                                ?>
+                                                            </td>
+                                                        <?php endif; ?>
+                                                        <?php if ($occupationExists): ?>
+                                                            <td>
+                                                                <?php
+                                                                if (!empty($patient['occupation'])) {
+                                                                    echo htmlspecialchars($patient['occupation']);
+                                                                } elseif (!empty($patient['user_occupation'])) {
+                                                                    echo htmlspecialchars($patient['user_occupation']);
+                                                                } else {
+                                                                    echo 'N/A';
+                                                                }
+                                                                ?>
+                                                            </td>
+                                                        <?php endif; ?>
                                                         <td>
-                                                            <a href="?convert_to_patient=<?= $user['id'] ?>"
-                                                                class="btn-add-patient inline-flex items-center"
-                                                                onclick="return confirm('Are you sure you want to add this user as a patient?')">
-                                                                <i class="fa-solid fa-plus text-1xl mr-3"></i>Include Patient
-                                                            </a>
+                                                            <?php if ($patient['patient_type'] === 'Registered Patient'): ?>
+                                                                <span class="user-badge">Registered Patient</span>
+                                                            <?php else: ?>
+                                                                <span class="regular-badge">Regular Patient</span>
+                                                            <?php endif; ?>
+                                                        </td>
+                                                        <td>
+                                                            <button onclick="openViewModal(<?= $patient['id'] ?>)"
+                                                                class="btn-view inline-flex items-center mr-2">
+                                                                <i class="fas fa-eye mr-1"></i> View
+                                                            </button>
+                                                            <?php if (!$manualSelectMode): ?>
+                                                                <a href="?delete_patient=<?= $patient['id'] ?>"
+                                                                    class="btn-archive inline-flex items-center"
+                                                                    onclick="return confirm('Are you sure you want to archive this patient record?')">
+                                                                    <i class="fas fa-trash-alt mr-1"></i> Archive
+                                                                </a>
+                                                            <?php endif; ?>
                                                         </td>
                                                     </tr>
                                                 <?php endforeach; ?>
@@ -2740,7 +3314,6 @@ if (!empty($selectedPatientId)) {
 
                 <?php if (empty($searchTerm)): ?>
                     <div class="section-bg overflow-hidden">
-                        <!-- UPDATED: Added Export Button and Filter -->
                         <div class="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
                             <div>
                                 <h3 class="text-lg font-medium text-secondary">
@@ -2822,6 +3395,9 @@ if (!empty($selectedPatientId)) {
                                                         <?php if ($occupationExists): ?>
                                                             <th>Occupation</th>
                                                         <?php endif; ?>
+                                                        <th>PHIC No.</th>
+                                                        <th>BHW</th>
+                                                        <th>4P's</th>
                                                         <th>Blood Type</th>
                                                         <th>Type</th>
                                                         <th>Actions</th>
@@ -2842,7 +3418,6 @@ if (!empty($selectedPatientId)) {
                                                             <td><?= htmlspecialchars($patient['full_name']) ?></td>
                                                             <td>
                                                                 <?php
-                                                                // Display date of birth properly - for registered users, it comes from user table
                                                                 if (!empty($patient['date_of_birth'])) {
                                                                     echo date('M d, Y', strtotime($patient['date_of_birth']));
                                                                 } else {
@@ -2853,7 +3428,6 @@ if (!empty($selectedPatientId)) {
                                                             <td><?= $patient['age'] ?? 'N/A' ?></td>
                                                             <td>
                                                                 <?php
-                                                                // Display gender properly
                                                                 if (!empty($patient['gender'])) {
                                                                     echo htmlspecialchars($patient['gender']);
                                                                 } else {
@@ -2864,7 +3438,6 @@ if (!empty($selectedPatientId)) {
                                                             <?php if ($sitioExists): ?>
                                                                 <td>
                                                                     <?php
-                                                                    // Show sitio from patient table if exists, otherwise from user table
                                                                     if (!empty($patient['sitio'])) {
                                                                         echo htmlspecialchars($patient['sitio']);
                                                                     } elseif (!empty($patient['user_sitio'])) {
@@ -2878,7 +3451,6 @@ if (!empty($selectedPatientId)) {
                                                             <?php if ($civilStatusExists): ?>
                                                                 <td>
                                                                     <?php
-                                                                    // Show civil status from patient table if exists, otherwise from user table
                                                                     if (!empty($patient['civil_status'])) {
                                                                         echo htmlspecialchars($patient['civil_status']);
                                                                     } elseif (!empty($patient['user_civil_status'])) {
@@ -2892,7 +3464,6 @@ if (!empty($selectedPatientId)) {
                                                             <?php if ($occupationExists): ?>
                                                                 <td>
                                                                     <?php
-                                                                    // Show occupation from patient table if exists, otherwise from user table
                                                                     if (!empty($patient['occupation'])) {
                                                                         echo htmlspecialchars($patient['occupation']);
                                                                     } elseif (!empty($patient['user_occupation'])) {
@@ -2903,13 +3474,15 @@ if (!empty($selectedPatientId)) {
                                                                     ?>
                                                                 </td>
                                                             <?php endif; ?>
+                                                            <td><?= htmlspecialchars($patient['phic_no'] ?? 'N/A') ?></td>
+                                                            <td><?= htmlspecialchars($patient['bhw_assigned'] ?? 'N/A') ?></td>
+                                                            <td><?= htmlspecialchars($patient['fourps_member'] ?? 'N/A') ?></td>
                                                             <td class="font-semibold text-primary">
                                                                 <?= htmlspecialchars($patient['blood_type'] ?? 'N/A') ?>
                                                             </td>
                                                             <td>
                                                                 <?php if ($patient['patient_type'] === 'Registered Patient'): ?>
                                                                     <span class="user-badge">Registered Patient</span>
-
                                                                 <?php else: ?>
                                                                     <span class="regular-badge">Regular Patient</span>
                                                                 <?php endif; ?>
@@ -2953,7 +3526,6 @@ if (!empty($selectedPatientId)) {
                                                 <?php if ($occupationExists): ?>
                                                     <th>Occupation</th>
                                                 <?php endif; ?>
-                                                <th>Blood Type</th>
                                                 <th>Type</th>
                                                 <th>Actions</th>
                                             </tr>
@@ -2965,7 +3537,6 @@ if (!empty($selectedPatientId)) {
                                                     <td><?= htmlspecialchars($patient['full_name']) ?></td>
                                                     <td>
                                                         <?php
-                                                        // Display date of birth properly - for registered users, it comes from user table
                                                         if (!empty($patient['date_of_birth'])) {
                                                             echo date('M d, Y', strtotime($patient['date_of_birth']));
                                                         } else {
@@ -2976,7 +3547,6 @@ if (!empty($selectedPatientId)) {
                                                     <td><?= $patient['age'] ?? 'N/A' ?></td>
                                                     <td>
                                                         <?php
-                                                        // Display gender properly
                                                         if (!empty($patient['gender'])) {
                                                             echo htmlspecialchars($patient['gender']);
                                                         } else {
@@ -2987,7 +3557,6 @@ if (!empty($selectedPatientId)) {
                                                     <?php if ($sitioExists): ?>
                                                         <td>
                                                             <?php
-                                                            // Show sitio from patient table if exists, otherwise from user table
                                                             if (!empty($patient['sitio'])) {
                                                                 echo htmlspecialchars($patient['sitio']);
                                                             } elseif (!empty($patient['user_sitio'])) {
@@ -3001,7 +3570,6 @@ if (!empty($selectedPatientId)) {
                                                     <?php if ($civilStatusExists): ?>
                                                         <td>
                                                             <?php
-                                                            // Show civil status from patient table if exists, otherwise from user table
                                                             if (!empty($patient['civil_status'])) {
                                                                 echo htmlspecialchars($patient['civil_status']);
                                                             } elseif (!empty($patient['user_civil_status'])) {
@@ -3015,7 +3583,6 @@ if (!empty($selectedPatientId)) {
                                                     <?php if ($occupationExists): ?>
                                                         <td>
                                                             <?php
-                                                            // Show occupation from patient table if exists, otherwise from user table
                                                             if (!empty($patient['occupation'])) {
                                                                 echo htmlspecialchars($patient['occupation']);
                                                             } elseif (!empty($patient['user_occupation'])) {
@@ -3026,13 +3593,9 @@ if (!empty($selectedPatientId)) {
                                                             ?>
                                                         </td>
                                                     <?php endif; ?>
-                                                    <td class="font-semibold text-primary">
-                                                        <?= htmlspecialchars($patient['blood_type'] ?? 'N/A') ?>
-                                                    </td>
                                                     <td>
                                                         <?php if ($patient['patient_type'] === 'Registered Patient'): ?>
                                                             <span class="user-badge">Registered Patient</span>
-
                                                         <?php else: ?>
                                                             <span class="regular-badge">Regular Patient</span>
                                                         <?php endif; ?>
@@ -3095,7 +3658,7 @@ if (!empty($selectedPatientId)) {
                 <?php endif; ?>
             </div>
 
-            <!-- Add Patient Tab - UPDATED: Now only shows a button to open modal -->
+            <!-- Add Patient Tab -->
             <div id="add-tab" class="tab-content p-6">
                 <div class="text-center py-12">
                     <div class="max-w-md mx-auto">
@@ -3130,8 +3693,6 @@ if (!empty($selectedPatientId)) {
                     <span class="text-white">Patient Health Information</span>
                 </h3>
 
-
-
                 <button onclick="closeViewModal()"
                     class="border-2 border-white text-white hover:bg-white/20 rounded-full w-8 h-8 flex items-center justify-center transition">
                     <i class="fas fa-times text-xl"></i>
@@ -3151,45 +3712,138 @@ if (!empty($selectedPatientId)) {
                 </div>
             </div>
 
-            <!-- In your existing_info_patients.php, replace the button section in view modal footer with: -->
-
-<!-- Sticky Footer - UPDATED: Proper form submission -->
-<div class="p-8 border-t border-gray-200 bg-white rounded-b-2xl sticky bottom-0">
-    <div class="flex flex-wrap items-center justify-between">
-        <div class="flex flex-col items-start">
-            <span class="flex items-center text-center gap-3 text-md text-gray-500 bg-gray-100 px-8 py-5 rounded-full">
-                <svg width="34" height="34" viewBox="0 0 34 34" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path fill-rule="evenodd" clip-rule="evenodd"
-                        d="M16.6667 33.3333C25.8717 33.3333 33.3333 25.8717 33.3333 16.6667C33.3333 7.46167 25.8717 0 16.6667 0C7.46167 0 0 7.46167 0 16.6667C0 25.8717 7.46167 33.3333 16.6667 33.3333ZM19.1667 9.58333C19.1667 10.3569 18.8594 11.0987 18.3124 11.6457C17.7654 12.1927 17.0235 12.5 16.25 12.5C15.4765 12.5 14.7346 12.1927 14.1876 11.6457C13.6406 11.0987 13.3333 10.3569 13.3333 9.58333C13.3333 8.80978 13.6406 8.06792 14.1876 7.52094C14.7346 6.97396 15.4765 6.66667 16.25 6.66667C17.0235 6.66667 17.7654 6.97396 18.3124 7.52094C18.8594 8.06792 19.1667 8.80978 19.1667 9.58333ZM17.6008 14.87C17.8264 15.0227 18.0111 15.2283 18.1388 15.4689C18.2665 15.7094 18.3333 15.9776 18.3333 16.25V22.72L19.9117 21.9308L21.4033 24.9117L17.4117 26.9075C17.1576 27.0345 16.8752 27.0944 16.5915 27.0816C16.3077 27.0688 16.0319 26.9836 15.7903 26.8343C15.5487 26.6849 15.3493 26.4763 15.2109 26.2282C15.0726 25.9801 15 25.7007 15 25.4167V18.7117L13.655 19.25L12.4167 16.155L16.0475 14.7025C16.3003 14.6013 16.5741 14.5635 16.8449 14.5926C17.1157 14.6216 17.3752 14.7174 17.6008 14.87Z"
-                        fill="black" fill-opacity="0.25" />
-                </svg>
-                View and edit patient information
-            </span>
-        </div>
-        <div class="flex space-x-4">
-            <div class="flex flex-col items-center mt-2">
-                <button onclick="printPatientRecord()" class="btn-export text-lg px-8 py-3 font-semibold">
-                    <i class="fas fa-print mr-3"></i>Print Patient Record
-                </button>
-            </div>
-            <div class="flex flex-col items-center">
-                <!-- This button will be dynamically connected to the form -->
-                <button 
-                    id="saveMedicalBtn"
-                    type="button"
-                    onclick="saveMedicalInformation()"
-                    class="btn-save-medical px-8 py-5 text-lg font-semibold"
-                >
-                    <i class="fas fa-save mr-2"></i>Save Medical Information
-                </button>
+            <!-- Sticky Footer -->
+            <div class="p-8 border-t border-gray-200 bg-white rounded-b-2xl sticky bottom-0">
+                <div class="flex flex-wrap items-center justify-between">
+                    <div class="flex flex-col items-start">
+                        <span class="flex items-center text-center gap-3 text-md text-gray-500 bg-gray-100 px-8 py-5 rounded-full">
+                            <svg width="34" height="34" viewBox="0 0 34 34" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <path fill-rule="evenodd" clip-rule="evenodd"
+                                    d="M16.6667 33.3333C25.8717 33.3333 33.3333 25.8717 33.3333 16.6667C33.3333 7.46167 25.8717 0 16.6667 0C7.46167 0 0 7.46167 0 16.6667C0 25.8717 7.46167 33.3333 16.6667 33.3333ZM19.1667 9.58333C19.1667 10.3569 18.8594 11.0987 18.3124 11.6457C17.7654 12.1927 17.0235 12.5 16.25 12.5C15.4765 12.5 14.7346 12.1927 14.1876 11.6457C13.6406 11.0987 13.3333 10.3569 13.3333 9.58333C13.3333 8.80978 13.6406 8.06792 14.1876 7.52094C14.7346 6.97396 15.4765 6.66667 16.25 6.66667C17.0235 6.66667 17.7654 6.97396 18.3124 7.52094C18.8594 8.06792 19.1667 8.80978 19.1667 9.58333ZM17.6008 14.87C17.8264 15.0227 18.0111 15.2283 18.1388 15.4689C18.2665 15.7094 18.3333 15.9776 18.3333 16.25V22.72L19.9117 21.9308L21.4033 24.9117L17.4117 26.9075C17.1576 27.0345 16.8752 27.0944 16.5915 27.0816C16.3077 27.0688 16.0319 26.9836 15.7903 26.8343C15.5487 26.6849 15.3493 26.4763 15.2109 26.2282C15.0726 25.9801 15 25.7007 15 25.4167V18.7117L13.655 19.25L12.4167 16.155L16.0475 14.7025C16.3003 14.6013 16.5741 14.5635 16.8449 14.5926C17.1157 14.6216 17.3752 14.7174 17.6008 14.87Z"
+                                    fill="black" fill-opacity="0.25" />
+                            </svg>
+                            View and edit patient information
+                        </span>
+                    </div>
+                    <div class="flex space-x-4">
+                        <div class="flex flex-col items-center mt-2">
+                            <button onclick="printPatientRecord()" class="btn-export text-lg px-8 py-3 font-semibold">
+                                <i class="fas fa-print mr-3"></i>Print Patient Records
+                            </button>
+                        </div>
+                        <div class="flex flex-col items-center">
+                            <button id="noteButton" onclick="openConsultationNoteModal()" class="btn-add-note px-8 py-5 text-lg font-semibold">
+                                <i class="fas fa-sticky-note mr-2"></i>Add Note
+                            </button>
+                        </div>
+                        <div class="flex flex-col items-center">
+                            <button 
+                                id="saveMedicalBtn"
+                                type="button"
+                                onclick="saveMedicalInformation()"
+                                class="btn-save-medical px-8 py-5 text-lg font-semibold"
+                            >
+                                <i class="fas fa-save mr-2"></i>Save Medical Information
+                            </button>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
-</div>
+
+    <!-- Consultation Note Modal -->
+    <div id="consultationNoteModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 modal"
+        style="display: none;">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-hidden flex flex-col">
+            <!-- Sticky Header -->
+            <div class="sticky top-0 z-20 bg-[#f39c12] px-10 py-6 flex items-center">
+                <h3 class="text-2xl font-medium flex justify-center text-center w-full items-center text-white">
+                    <i class="fas fa-sticky-note mr-3"></i>
+                    <span class="text-white" id="consultationNoteTitle">Add Consultation Note</span>
+                </h3>
+                <button onclick="closeConsultationNoteModal()"
+                    class="border-2 border-white text-white hover:bg-white/20 rounded-full w-8 h-8 flex items-center justify-center transition">
+                    <i class="fas fa-times text-xl"></i>
+                </button>
+            </div>
+
+            <!-- Scrollable Content -->
+            <div class="px-10 py-6 bg-gray-50 flex-1 overflow-y-auto">
+                <div id="consultationNoteContent">
+                    <!-- Add Note Form -->
+                    <form id="addNoteForm" method="POST" action="">
+                        <input type="hidden" name="patient_id" id="notePatientId" value="">
+                        
+                        <div class="space-y-6">
+                            <div>
+                                <label for="consultation_date" class="block text-gray-700 mb-2 font-medium">
+                                    Consultation Date <span class="text-red-500">*</span>
+                                </label>
+                                <input type="date" id="consultation_date" name="consultation_date" 
+                                       value="<?= date('Y-m-d') ?>"
+                                       class="w-full px-4 py-3 border border-[#85ccfb] rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
+                                       required>
+                            </div>
+                            
+                            <div>
+                                <label for="next_consultation_date" class="block text-gray-700 mb-2 font-medium">
+                                    Next Consultation Date
+                                </label>
+                                <input type="date" id="next_consultation_date" name="next_consultation_date" 
+                                       class="w-full px-4 py-3 border border-[#85ccfb] rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary">
+                            </div>
+                            
+                            <div>
+                                <label for="note" class="block text-gray-700 mb-2 font-medium">
+                                    Consultation Note <span class="text-red-500">*</span>
+                                </label>
+                                <textarea id="note" name="note" rows="8" 
+                                          class="w-full px-4 py-3 border border-[#85ccfb] rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
+                                          placeholder="Enter consultation notes, observations, recommendations, and treatment plans..."
+                                          required></textarea>
+                            </div>
+                        </div>
+                    </form>
+                    
+                    <!-- View Notes Content -->
+                    <div id="viewNotesContent" style="display: none;">
+                        <div class="space-y-4" id="consultationNotesList">
+                            <!-- Notes will be loaded here -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Footer -->
+            <div class="p-6 border-t border-gray-200 bg-white">
+                <div class="flex justify-between items-center">
+                    <button type="button" onclick="closeConsultationNoteModal()" 
+                            class="btn-gray px-6 py-3">
+                        <i class="fas fa-times mr-2"></i>Cancel
+                    </button>
+                    
+                    <!-- Add Note Button (shown when in Add mode) -->
+                    <div id="addNoteActions">
+                        <button type="button" onclick="saveConsultationNote()" 
+                                class="btn-add-note px-6 py-3">
+                            <i class="fas fa-save mr-2"></i>Save Note
+                        </button>
+                    </div>
+                    
+                    <!-- View Note Actions (shown when in View mode) -->
+                    <div id="viewNoteActions" style="display: none;">
+                        <button type="button" onclick="switchToAddNote()" 
+                                class="btn-add-note px-6 py-3">
+                            <i class="fas fa-plus mr-2"></i>Add New Note
+                        </button>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 
-    <!-- NEW: Add Patient Modal (DESIGN ENHANCED – FUNCTIONALITY RETAINED) -->
+    <!-- Add Patient Modal -->
     <div id="addPatientModal" class="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50 modal"
         style="display:none;">
 
@@ -3301,6 +3955,45 @@ if (!empty($selectedPatientId)) {
                                         class="form-input-modal w-full rounded-xl border-blue-200 px-4 py-3">
                                 </div>
                             <?php endif; ?>
+                            
+                            <div>
+                                <label for="modal_phic_no" class="block text-sm font-medium mb-2">
+                                    PHIC No.
+                                </label>
+                                <input type="text" id="modal_phic_no" name="phic_no"
+                                    placeholder="Enter PHIC Number"
+                                    class="form-input-modal w-full rounded-xl border-blue-200 px-4 py-3">
+                            </div>
+
+                            <div>
+                                <label for="modal_bhw_assigned" class="block text-sm font-medium mb-2">
+                                    BHW Assigned
+                                </label>
+                                <input type="text" id="modal_bhw_assigned" name="bhw_assigned"
+                                    placeholder="Enter BHW Name"
+                                    class="form-input-modal w-full rounded-xl border-blue-200 px-4 py-3">
+                            </div>
+
+                            <div>
+                                <label for="modal_family_no" class="block text-sm font-medium mb-2">
+                                    Family No.
+                                </label>
+                                <input type="text" id="modal_family_no" name="family_no"
+                                    placeholder="Enter Family Number"
+                                    class="form-input-modal w-full rounded-xl border-blue-200 px-4 py-3">
+                            </div>
+
+                            <div>
+                                <label for="modal_fourps_member" class="block text-sm font-medium mb-2">
+                                    4P's Member
+                                </label>
+                                <select id="modal_fourps_member" name="fourps_member"
+                                    class="form-select-modal w-full rounded-xl border-blue-200 px-4 py-3">
+                                    <option value="No">No</option>
+                                    <option value="Yes">Yes</option>
+                                </select>
+                            </div>
+                            
                             <?php if ($sitioExists): ?>
                                 <div>
                                     <label for="modal_sitio" class="block text-sm font-medium mb-2">
@@ -3518,14 +4211,268 @@ if (!empty($selectedPatientId)) {
     </div>
 
     <script>
-        // Enhanced Export functionality
+        // Consultation Notes Variables
+        let currentPatientId = null;
+        let hasNotes = false;
+        let noteCount = 0;
+
+        // Age calculation function
+        function calculateAge(dateOfBirth, ageInput) {
+            if (!dateOfBirth) {
+                ageInput.value = '';
+                return;
+            }
+            
+            const dob = new Date(dateOfBirth);
+            const today = new Date();
+            
+            // Calculate age
+            let age = today.getFullYear() - dob.getFullYear();
+            const monthDiff = today.getMonth() - dob.getMonth();
+            
+            // Adjust age if birthday hasn't occurred yet this year
+            if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < dob.getDate())) {
+                age--;
+            }
+            
+            // Validate that date is not in the future
+            if (dob > today) {
+                showNotification('error', 'Date of birth cannot be in the future!');
+                document.getElementById('modal_date_of_birth').value = '';
+                ageInput.value = '';
+                return;
+            }
+            
+            // Validate reasonable age (0-120 years)
+            if (age < 0 || age > 120) {
+                showNotification('error', 'Please enter a valid date of birth (age must be between 0-120 years)');
+                document.getElementById('modal_date_of_birth').value = '';
+                ageInput.value = '';
+                return;
+            }
+            
+            ageInput.value = age;
+        }
+
+        // Enhanced Consultation Note Functions
+        function openConsultationNoteModal() {
+            // Get patient ID from the view modal
+            const patientIdInput = document.querySelector('#modalContent input[name="patient_id"]');
+            if (!patientIdInput) {
+                showNotification('error', 'Unable to get patient information.');
+                return;
+            }
+            
+            currentPatientId = patientIdInput.value;
+            document.getElementById('notePatientId').value = currentPatientId;
+            
+            // Check if patient has existing notes
+            checkConsultationNotes(currentPatientId);
+            
+            // Show modal
+            const modal = document.getElementById('consultationNoteModal');
+            modal.style.display = 'flex';
+            modal.style.opacity = '0';
+            
+            setTimeout(() => {
+                modal.style.opacity = '1';
+                modal.style.transition = 'opacity 0.3s ease';
+            }, 10);
+        }
+
+        function closeConsultationNoteModal() {
+            const modal = document.getElementById('consultationNoteModal');
+            modal.style.opacity = '0';
+            setTimeout(() => {
+                modal.style.display = 'none';
+                resetConsultationNoteModal();
+            }, 300);
+        }
+
+        // Update other functions to use correct paths
+        function checkConsultationNotes(patientId) {
+            fetch(`../api/check_consultation_notes.php?patient_id=${patientId}`)
+                .then(response => response.json())
+                .then(data => {
+                    hasNotes = data.hasNotes;
+                    noteCount = data.noteCount || 0;
+                    
+                    if (hasNotes) {
+                        // Also reload the inline notes section
+                        loadConsultationNotesInline(patientId);
+                    }
+                    
+                    updateNoteButtonCount(noteCount);
+                })
+                .catch(error => {
+                    console.error('Error checking notes:', error);
+                });
+        }
+
+        function loadConsultationNotes(patientId) {
+            const notesList = document.getElementById('consultationNotesList');
+            notesList.innerHTML = `
+                <div class="loading-notes">
+                    <div class="loading-spinner"></div>
+                    <p class="ml-3 text-gray-600">Loading consultation notes...</p>
+                </div>
+            `;
+            
+            fetch(`../api/get_consultation_notes.php?patient_id=${patientId}`)
+                .then(response => response.text())
+                .then(html => {
+                    notesList.innerHTML = html;
+                })
+                .catch(error => {
+                    console.error('Error loading notes:', error);
+                    notesList.innerHTML = 
+                        '<div class="text-center py-8 text-gray-500 bg-gray-50 rounded-lg">' +
+                            '<i class="fas fa-exclamation-triangle text-2xl mb-3 text-gray-400"></i>' +
+                            '<p>Error loading consultation notes.</p>' +
+                        '</div>';
+                });
+        }
+
+        function updateNoteButtonCount(count) {
+            const noteButton = document.getElementById('noteButton');
+            if (noteButton) {
+                if (count > 0) {
+                    // Create or update badge
+                    let badge = noteButton.querySelector('.note-badge');
+                    if (!badge) {
+                        badge = document.createElement('span');
+                        badge.className = 'note-badge';
+                        noteButton.appendChild(badge);
+                    }
+                    badge.textContent = count;
+                    
+                    // Update button text and style
+                    noteButton.innerHTML = '<i class="fas fa-sticky-note mr-2"></i>View Doctors Note ';
+                    noteButton.appendChild(badge);
+                    noteButton.classList.remove('btn-add-note');
+                    noteButton.classList.add('btn-view-notes');
+                } else {
+                    // Remove badge if exists
+                    const badge = noteButton.querySelector('.note-badge');
+                    if (badge) {
+                        badge.remove();
+                    }
+                    
+                    // Reset button to Add Note
+                    noteButton.innerHTML = '<i class="fas fa-sticky-note mr-2"></i>Add Note';
+                    noteButton.classList.remove('btn-view-notes');
+                    noteButton.classList.add('btn-add-note');
+                }
+            }
+        }
+
+        function switchToViewNotes() {
+            document.getElementById('consultationNoteTitle').innerHTML = 
+                `<i class="fas fa-sticky-note mr-2"></i>Consultation Notes (${noteCount})`;
+            document.getElementById('addNoteForm').style.display = 'none';
+            document.getElementById('viewNotesContent').style.display = 'block';
+            document.getElementById('addNoteActions').style.display = 'none';
+            document.getElementById('viewNoteActions').style.display = 'block';
+        }
+
+        function switchToAddNote() {
+            document.getElementById('consultationNoteTitle').innerHTML = 
+                '<i class="fas fa-plus-circle mr-2"></i>Add Consultation Note';
+            document.getElementById('addNoteForm').style.display = 'block';
+            document.getElementById('viewNotesContent').style.display = 'none';
+            document.getElementById('addNoteActions').style.display = 'block';
+            document.getElementById('viewNoteActions').style.display = 'none';
+            
+            // Reset form with current date
+            const today = new Date().toISOString().split('T')[0];
+            document.getElementById('consultation_date').value = today;
+            document.getElementById('next_consultation_date').value = '';
+            document.getElementById('note').value = '';
+        }
+
+        function resetConsultationNoteModal() {
+            // Reset to Add Note mode by default
+            switchToAddNote();
+            hasNotes = false;
+            noteCount = 0;
+            currentPatientId = null;
+        }
+
+        function saveConsultationNote() {
+    // Get form values
+    const patientId = document.getElementById('notePatientId').value;
+    const note = document.getElementById('note').value.trim();
+    const consultationDate = document.getElementById('consultation_date').value;
+    const nextDate = document.getElementById('next_consultation_date').value;
+    
+    if (!patientId || !note || !consultationDate) {
+        showNotification('error', 'Please fill in all required fields.');
+        return;
+    }
+    
+    const formData = new FormData();
+    formData.append('patient_id', patientId);
+    formData.append('note', note);
+    formData.append('consultation_date', consultationDate);
+    if (nextDate) {
+        formData.append('next_consultation_date', nextDate);
+    }
+    formData.append('add_consultation_note', '1');
+    
+    // Show loading
+    const saveBtn = document.querySelector('#addNoteActions button');
+    const originalText = saveBtn.innerHTML;
+    saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Saving...';
+    saveBtn.disabled = true;
+    
+    fetch('existing_info_patients.php', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.text())
+    .then(result => {
+        if (result.includes('successfully') || result.includes('Consultation note added')) {
+            showNotification('success', 'Consultation note added successfully!');
+            
+            // Clear form
+            document.getElementById('note').value = '';
+            
+            // Close consultation note modal
+            closeConsultationNoteModal();
+            
+            // Refresh notes and patient data in the main modal
+            setTimeout(() => {
+                loadConsultationNotesInline(patientId);
+                checkConsultationNotes(patientId);
+                
+                // Optional: Refresh the entire patient data
+                if (typeof reloadPatientData === 'function') {
+                    reloadPatientData(patientId);
+                }
+            }, 500);
+            
+        } else {
+            showNotification('error', 'Error saving consultation note. Please try again.');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showNotification('error', 'Network error. Check console for details.');
+    })
+    .finally(() => {
+        saveBtn.innerHTML = originalText;
+        saveBtn.disabled = false;
+    });
+}
+
+        // Export functionality
         function toggleExportOptions() {
             const exportOptions = document.getElementById('exportOptions');
             exportOptions.classList.toggle('show');
         }
 
         // Export all records based on current filter
-        function exportAllRecords() {
+        function exportAllRecords(format) {
             // Close dropdown
             const exportOptions = document.getElementById('exportOptions');
             exportOptions.classList.remove('show');
@@ -3538,7 +4485,7 @@ if (!empty($selectedPatientId)) {
             const currentPatientType = patientTypeSelect ? patientTypeSelect.value : 'all';
 
             // Build export URL
-            let url = `existing_info_patients.php?export=excel&patient_type=${currentPatientType}`;
+            let url = `existing_info_patients.php?export=${format}&patient_type=${currentPatientType}`;
 
             // Add current search parameters
             const tab = urlParams.get('tab');
@@ -3555,7 +4502,11 @@ if (!empty($selectedPatientId)) {
                 'registered': 'Registered Patients',
                 'regular': 'Regular Patients'
             };
-            showNotification('info', `Exporting ${typeLabels[currentPatientType] || 'All Patients'}...`);
+            const formatLabels = {
+                'excel': 'Excel',
+                'pdf': 'PDF'
+            };
+            showNotification('info', `Exporting ${typeLabels[currentPatientType] || 'All Patients'} as ${formatLabels[format] || format}...`);
 
             // Open export URL in new tab
             const exportWindow = window.open(url, '_blank');
@@ -3656,111 +4607,21 @@ if (!empty($selectedPatientId)) {
         // Initialize selected count on page load
         document.addEventListener('DOMContentLoaded', function () {
             updateSelectedCount();
-        });
-
-        // Rest of your existing JavaScript code remains the same...
-        // Form validation functionality for modal
-        document.addEventListener('DOMContentLoaded', function () {
-            const modalFormFields = document.querySelectorAll('.modal-form-field');
-            const modalRegisterBtn = document.getElementById('modalRegisterPatientBtn');
-            const modalDateOfBirth = document.getElementById('modal_date_of_birth');
-            const modalAge = document.getElementById('modal_age');
-
-            // Initialize modal field validation
-            modalFormFields.forEach(field => {
-                // Set initial state
-                updateModalFieldState(field);
-
-                // Add event listeners
-                field.addEventListener('input', function () {
-                    updateModalFieldState(this);
-                    checkModalFormValidity();
+            
+            // Age calculation for Add Patient modal
+            const dobInput = document.getElementById('modal_date_of_birth');
+            const ageInput = document.getElementById('modal_age');
+            
+            if (dobInput && ageInput) {
+                dobInput.addEventListener('change', function() {
+                    calculateAge(this.value, ageInput);
                 });
-
-                field.addEventListener('change', function () {
-                    updateModalFieldState(this);
-                    checkModalFormValidity();
-                });
-
-                field.addEventListener('blur', function () {
-                    updateModalFieldState(this);
-                });
-            });
-
-            // Age calculation from date of birth in modal
-            if (modalDateOfBirth && modalAge) {
-                modalDateOfBirth.addEventListener('change', function () {
-                    calculateModalAge(this.value);
-                });
-            }
-
-            // Calculate age function for modal
-            function calculateModalAge(dateOfBirth) {
-                if (!dateOfBirth) return;
-
-                const birthDate = new Date(dateOfBirth);
-                const today = new Date();
-
-                let age = today.getFullYear() - birthDate.getFullYear();
-                const monthDiff = today.getMonth() - birthDate.getMonth();
-
-                if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
-                    age--;
-                }
-
-                modalAge.value = age;
-
-                // Update form validation state
-                updateModalFieldState(modalAge);
-                checkModalFormValidity();
-            }
-
-            // Update modal field background color
-            function updateModalFieldState(field) {
-                if (!field) return;
-
-                const value = field.type === 'checkbox' ? field.checked : field.value.trim();
-                const isRequired = field.hasAttribute('required');
-
-                if (isRequired && !value) {
-                    field.classList.add('field-empty');
-                    field.classList.remove('field-filled');
-                } else if (value) {
-                    field.classList.add('field-filled');
-                    field.classList.remove('field-empty');
-                } else {
-                    field.classList.remove('field-filled', 'field-empty');
+                
+                // Calculate age on page load if date is already set
+                if (dobInput.value) {
+                    calculateAge(dobInput.value, ageInput);
                 }
             }
-
-            // Check if all required modal fields are filled
-            function checkModalFormValidity() {
-                if (!modalRegisterBtn) return;
-
-                let allRequiredFilled = true;
-
-                // Check required form fields
-                modalFormFields.forEach(field => {
-                    if (field.hasAttribute('required')) {
-                        const value = field.type === 'checkbox' ? field.checked : field.value.trim();
-                        if (!value) {
-                            allRequiredFilled = false;
-                        }
-                    }
-                });
-
-                // Enable/disable register button
-                if (allRequiredFilled) {
-                    modalRegisterBtn.disabled = false;
-                    modalRegisterBtn.classList.remove('btn-disabled');
-                } else {
-                    modalRegisterBtn.disabled = true;
-                    modalRegisterBtn.classList.add('btn-disabled');
-                }
-            }
-
-            // Initialize modal form state
-            checkModalFormValidity();
         });
 
         // Modal functions
@@ -3773,6 +4634,12 @@ if (!empty($selectedPatientId)) {
                 modal.style.opacity = '1';
                 modal.style.transition = 'opacity 0.3s ease';
             }, 10);
+            
+            // Reset age field
+            const ageInput = document.getElementById('modal_age');
+            if (ageInput) {
+                ageInput.value = '';
+            }
         }
 
         function closeAddPatientModal() {
@@ -3793,6 +4660,12 @@ if (!empty($selectedPatientId)) {
                 modalFormFields.forEach(field => {
                     field.classList.remove('field-filled', 'field-empty');
                 });
+
+                // Reset age field
+                const ageInput = document.getElementById('modal_age');
+                if (ageInput) {
+                    ageInput.value = '';
+                }
 
                 // Re-check form validity
                 setTimeout(() => {
@@ -3830,20 +4703,21 @@ if (!empty($selectedPatientId)) {
                 .then(response => response.text())
                 .then(data => {
                     document.getElementById('modalContent').innerHTML = data;
-
-                    // Add custom styling for the loaded content
+                    
+                    // Add consultation notes section at the top
+                    addConsultationNotesSection(patientId);
+                    
+                    // Add custom styling
                     const modalContent = document.getElementById('modalContent');
                     const forms = modalContent.querySelectorAll('form');
                     forms.forEach(form => {
                         form.classList.add('w-full', 'max-w-full');
-
-                        // Make form containers wider
+                        
                         const containers = form.querySelectorAll('.grid, .flex');
                         containers.forEach(container => {
                             container.classList.add('w-full');
                         });
-
-                        // Make input fields larger and more visible
+                        
                         const inputs = form.querySelectorAll('input, select, textarea');
                         inputs.forEach(input => {
                             if (!input.classList.contains('readonly-field')) {
@@ -3851,9 +4725,9 @@ if (!empty($selectedPatientId)) {
                             }
                         });
                     });
-
-                    // Set up the Save Medical Information button
+                    
                     setupMedicalForm();
+                    checkConsultationNotes(patientId);
                 })
                 .catch(error => {
                     document.getElementById('modalContent').innerHTML = `
@@ -3878,133 +4752,133 @@ if (!empty($selectedPatientId)) {
         }
 
         // Function to collect all medical data and submit
-function saveMedicalInformation() {
-    const healthInfoForm = document.getElementById('healthInfoForm');
-    
-    if (!healthInfoForm) {
-        showNotification('error', 'Medical form not found. Please reload the page.');
-        return;
-    }
-    
-    // Validate required fields
-    const requiredFields = healthInfoForm.querySelectorAll('[required]');
-    let isValid = true;
-    let missingFields = [];
-    
-    requiredFields.forEach(field => {
-        if (!field.value.trim()) {
-            isValid = false;
-            missingFields.push(field.name.replace('_', ' '));
-            field.classList.add('field-empty');
-            field.classList.remove('field-filled');
-        } else {
-            field.classList.add('field-filled');
-            field.classList.remove('field-empty');
-        }
-    });
-    
-    if (!isValid) {
-        showNotification('error', `Please fill in all required fields: ${missingFields.join(', ')}`);
-        
-        // Scroll to first missing field
-        const firstMissing = healthInfoForm.querySelector('.field-empty');
-        if (firstMissing) {
-            firstMissing.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            firstMissing.focus();
-        }
-        return;
-    }
-    
-    // Collect all form data
-    const formData = new FormData(healthInfoForm);
-    
-    // Add all medical fields explicitly
-    const medicalFields = [
-        'height', 'weight', 'blood_type', 'temperature',
-        'blood_pressure', 'allergies', 'medical_history',
-        'current_medications', 'family_history',
-        'immunization_record', 'chronic_conditions', 'gender'
-    ];
-    
-    medicalFields.forEach(field => {
-        const element = healthInfoForm.querySelector(`[name="${field}"]`);
-        if (element) {
-            formData.set(field, element.value);
-        }
-    });
-    
-    // Show loading state
-    const saveBtn = document.getElementById('saveMedicalBtn');
-    const originalBtnText = saveBtn.innerHTML;
-    saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Saving...';
-    saveBtn.disabled = true;
-    
-    // Submit the form via AJAX
-    fetch(healthInfoForm.action, {
-        method: 'POST',
-        body: formData
-    })
-    .then(response => response.text())
-    .then(result => {
-        // Check if successful (you might need to adjust this based on your response)
-        if (result.includes('successfully') || result.includes('Success') || result.includes('saved')) {
-            showNotification('success', 'Medical information saved successfully!');
+        function saveMedicalInformation() {
+            const healthInfoForm = document.getElementById('healthInfoForm');
             
-            // Optionally reload the modal to show updated data
-            const patientId = formData.get('patient_id');
-            if (patientId) {
-                setTimeout(() => {
-                    // Close and reopen modal to refresh data
-                    closeViewModal();
-                    setTimeout(() => {
-                        openViewModal(patientId);
-                    }, 500);
-                }, 2000);
+            if (!healthInfoForm) {
+                showNotification('error', 'Medical form not found. Please reload the page.');
+                return;
             }
-        } else {
-            showNotification('error', 'Error saving medical information. Please try again.');
-        }
-    })
-    .catch(error => {
-        console.error('Error:', error);
-        showNotification('error', 'Network error: ' + error.message);
-    })
-    .finally(() => {
-        // Restore button
-        saveBtn.innerHTML = originalBtnText;
-        saveBtn.disabled = false;
-    });
-}
-
-// Updated setupMedicalForm function (simplified)
-function setupMedicalForm() {
-    // This function is now only for setup, not for submission
-    const healthInfoForm = document.getElementById('healthInfoForm');
-    
-    if (healthInfoForm) {
-        // Add input validation styling
-        const inputs = healthInfoForm.querySelectorAll('input, select, textarea');
-        inputs.forEach(input => {
-            input.addEventListener('input', function() {
-                if (this.value.trim()) {
-                    this.classList.add('field-filled');
-                    this.classList.remove('field-empty');
-                } else if (this.hasAttribute('required')) {
-                    this.classList.add('field-empty');
-                    this.classList.remove('field-filled');
+            
+            // Validate required fields
+            const requiredFields = healthInfoForm.querySelectorAll('[required]');
+            let isValid = true;
+            let missingFields = [];
+            
+            requiredFields.forEach(field => {
+                if (!field.value.trim()) {
+                    isValid = false;
+                    missingFields.push(field.name.replace('_', ' '));
+                    field.classList.add('field-empty');
+                    field.classList.remove('field-filled');
+                } else {
+                    field.classList.add('field-filled');
+                    field.classList.remove('field-empty');
                 }
             });
             
-            input.addEventListener('blur', function() {
-                if (this.hasAttribute('required') && !this.value.trim()) {
-                    this.classList.add('field-empty');
-                    this.classList.remove('field-filled');
+            if (!isValid) {
+                showNotification('error', `Please fill in all required fields: ${missingFields.join(', ')}`);
+                
+                // Scroll to first missing field
+                const firstMissing = healthInfoForm.querySelector('.field-empty');
+                if (firstMissing) {
+                    firstMissing.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    firstMissing.focus();
+                }
+                return;
+            }
+            
+            // Collect all form data
+            const formData = new FormData(healthInfoForm);
+            
+            // Add all medical fields explicitly
+            const medicalFields = [
+                'height', 'weight', 'blood_type', 'temperature',
+                'blood_pressure', 'allergies', 'medical_history',
+                'current_medications', 'family_history',
+                'immunization_record', 'chronic_conditions', 'gender',
+                'phic_no', 'bhw_assigned', 'family_no', 'fourps_member'
+            ];
+            
+            medicalFields.forEach(field => {
+                const element = healthInfoForm.querySelector(`[name="${field}"]`);
+                if (element) {
+                    formData.set(field, element.value);
                 }
             });
-        });
-    }
-}
+            
+            // Show loading state
+            const saveBtn = document.getElementById('saveMedicalBtn');
+            const originalBtnText = saveBtn.innerHTML;
+            saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Saving...';
+            saveBtn.disabled = true;
+            
+            // Submit the form via AJAX
+            fetch(healthInfoForm.action, {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.text())
+            .then(result => {
+                // Check if successful (you might need to adjust this based on your response)
+                if (result.includes('successfully') || result.includes('Success') || result.includes('saved')) {
+                    showNotification('success', 'Medical information saved successfully!');
+                    
+                    // Optionally reload the modal to show updated data
+                    const patientId = formData.get('patient_id');
+                    if (patientId) {
+                        setTimeout(() => {
+                            // Close and reopen modal to refresh data
+                            closeViewModal();
+                            setTimeout(() => {
+                                openViewModal(patientId);
+                            }, 500);
+                        }, 2000);
+                    }
+                } else {
+                    showNotification('error', 'Error saving medical information. Please try again.');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                showNotification('error', 'Network error: ' + error.message);
+            })
+            .finally(() => {
+                // Restore button
+                saveBtn.innerHTML = originalBtnText;
+                saveBtn.disabled = false;
+            });
+        }
 
+        // Updated setupMedicalForm function (simplified)
+        function setupMedicalForm() {
+            // This function is now only for setup, not for submission
+            const healthInfoForm = document.getElementById('healthInfoForm');
+            
+            if (healthInfoForm) {
+                // Add input validation styling
+                const inputs = healthInfoForm.querySelectorAll('input, select, textarea');
+                inputs.forEach(input => {
+                    input.addEventListener('input', function() {
+                        if (this.value.trim()) {
+                            this.classList.add('field-filled');
+                            this.classList.remove('field-empty');
+                        } else if (this.hasAttribute('required')) {
+                            this.classList.add('field-empty');
+                            this.classList.remove('field-filled');
+                        }
+                    });
+                    
+                    input.addEventListener('blur', function() {
+                        if (this.hasAttribute('required') && !this.value.trim()) {
+                            this.classList.add('field-empty');
+                            this.classList.remove('field-filled');
+                        }
+                    });
+                });
+            }
+        }
 
         // Print Patient Record Function
         function printPatientRecord() {
@@ -4091,12 +4965,16 @@ function setupMedicalForm() {
         window.onclick = function (event) {
             const viewModal = document.getElementById('viewModal');
             const addPatientModal = document.getElementById('addPatientModal');
+            const consultationNoteModal = document.getElementById('consultationNoteModal');
 
             if (event.target === viewModal) {
                 closeViewModal();
             }
             if (event.target === addPatientModal) {
                 closeAddPatientModal();
+            }
+            if (event.target === consultationNoteModal) {
+                closeConsultationNoteModal();
             }
         };
 
@@ -4105,6 +4983,7 @@ function setupMedicalForm() {
             if (event.key === 'Escape') {
                 closeViewModal();
                 closeAddPatientModal();
+                closeConsultationNoteModal();
             }
         });
 
@@ -4189,402 +5068,355 @@ function setupMedicalForm() {
             window.history.replaceState({}, document.title, window.location.pathname);
         }
 
-        // Ensure buttons have proper opacity styling
+        // Ensure buttons have proper styling
         document.addEventListener('DOMContentLoaded', function () {
-            const buttons = document.querySelectorAll('.btn-view, .btn-archive, .btn-add-patient, .btn-primary, .btn-success, .btn-gray, .btn-print, .btn-edit, .btn-save-medical, .btn-view-all, .btn-back-to-pagination, .pagination-btn');
+            const buttons = document.querySelectorAll('.btn-view, .btn-archive, .btn-add-patient, .btn-primary, .btn-success, .btn-gray, .btn-print, .btn-edit, .btn-save-medical, .btn-add-note, .btn-view-notes, .btn-view-all, .btn-back-to-pagination, .pagination-btn, .btn-pdf');
             buttons.forEach(button => {
                 button.style.borderStyle = 'solid';
             });
         });
-    </script>
 
-    <script>
-        // Enhanced form submission with success modal
-        document.addEventListener('DOMContentLoaded', function () {
-            const healthInfoForm = document.getElementById('healthInfoForm');
-            const viewModal = document.getElementById('viewModal');
+        // Update the addConsultationNotesSection function to include horizontal layout
+function addConsultationNotesSection(patientId) {
+    // Find the form to insert notes section before it
+    const healthInfoForm = document.getElementById('healthInfoForm');
+    if (!healthInfoForm) return;
+    
+    // Create consultation notes section container
+    const notesSection = document.createElement('div');
+    notesSection.className = 'bg-white rounded-xl border border-blue-200 shadow-sm mb-8 overflow-hidden';
+    notesSection.innerHTML = `
+        <div class="bg-blue-50 px-8 py-6 border-b border-blue-100">
+            <div class="flex justify-between items-center">
+                <h3 class="text-xl font-semibold text-secondary flex items-center gap-3">
+                    <i class="fas fa-sticky-note text-primary"></i>
+                    Consultation Notes History
+                    <span id="notesCountBadge" class="bg-primary text-white text-sm px-3 py-1 rounded-full">0 notes</span>
+                </h3>
+                <button onclick="openConsultationNoteModal()" 
+                        class="btn-add-note px-4 py-2 text-sm font-medium">
+                    <i class="fas fa-plus mr-2"></i>Add New Note
+                </button>
+            </div>
+            <p class="text-gray-600 mt-2 text-sm">View past consultations and add new notes for this patient.</p>
+        </div>
+        <div id="notesHistoryContainer" class="p-6">
+            <div class="horizontal-notes-container">
+                <div class="text-center py-8 w-full">
+                    <div class="loading-notes">
+                        <div class="loading-spinner"></div>
+                        <p class="ml-3 text-gray-600">Loading consultation notes...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // Insert the notes section before the health info form
+    healthInfoForm.parentNode.insertBefore(notesSection, healthInfoForm);
+    
+    // Load the notes immediately
+    loadConsultationNotesInline(patientId);
+}
 
-            if (healthInfoForm) {
-                healthInfoForm.addEventListener('submit', async function (e) {
-                    e.preventDefault();
-
-                    // Show loading state
-                    const submitBtn = this.querySelector('button[type="submit"]');
-                    const originalBtnText = submitBtn.innerHTML;
-                    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Saving...';
-                    submitBtn.disabled = true;
-
-                    try {
-                        const formData = new FormData(this);
-                        const response = await fetch(this.action, {
-                            method: 'POST',
-                            body: formData
-                        });
-
-                        const result = await response.json();
-
-                        if (result.success) {
-                            // Close the view modal
-                            if (viewModal) {
-                                closeViewModal();
-                            }
-
-                            // Show success modal with beautiful design
-                            showSuccessModal(result.formatted_data || result.data);
-
-                            // Optional: Refresh the patient list after a delay
-                            setTimeout(() => {
-                                if (window.location.search.includes('tab=patients-tab')) {
-                                    window.location.reload();
-                                }
-                            }, 3000);
-
-                        } else {
-                            showNotification('error', result.message || 'Error saving patient information');
-                        }
-
-                    } catch (error) {
-                        showNotification('error', 'Network error: ' + error.message);
-                        console.error('Form submission error:', error);
-                    } finally {
-                        // Restore button
-                        submitBtn.innerHTML = originalBtnText;
-                        submitBtn.disabled = false;
-                    }
-                });
+        // Function to load consultation notes inline in the main modal
+function loadConsultationNotesInline(patientId) {
+    const container = document.getElementById('notesHistoryContainer');
+    if (!container) return;
+    
+    fetch(`./get_consultation_notes.php?patient_id=${patientId}&inline=true`)
+        .then(response => response.text())
+        .then(html => {
+            container.innerHTML = html;
+            
+            // Update the notes count badge
+            const notesCount = container.querySelectorAll('.note-card').length;
+            const notesCountBadge = document.getElementById('notesCountBadge');
+            if (notesCountBadge) {
+                notesCountBadge.textContent = `${notesCount} note${notesCount !== 1 ? 's' : ''}`;
             }
+        })
+        .catch(error => {
+            console.error('Error loading notes:', error);
+            container.innerHTML = `
+                <div class="empty-notes">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <p>Unable to load consultation notes. Please try again.</p>
+                    <button onclick="loadConsultationNotesInline(${patientId})" 
+                            class="btn-primary px-4 py-2 text-sm">
+                        <i class="fas fa-redo mr-1"></i> Retry
+                    </button>
+                </div>
+            `;
         });
+}
 
-        // Function to show success modal
-        function showSuccessModal(data) {
-            // Remove existing success modal if any
-            const existingModal = document.getElementById('successModal');
-            if (existingModal) {
-                existingModal.remove();
-            }
-
-            // Create modal HTML
-            const modalHTML = `
-                <div id="successModal" class="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center p-4 z-[9999] animate-fadeIn">
-                    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden border-2 border-success animate-scaleIn">
-                        <!-- Modal Header -->
-                        <div class="p-8 bg-gradient-to-r from-success/10 to-success/5 border-b border-success/20">
-                            <div class="flex items-center justify-between">
-                                <div class="flex items-center space-x-4">
-                                    <div class="w-16 h-16 bg-success/20 rounded-full flex items-center justify-center">
-                                        <i class="fas fa-check-circle text-3xl text-success"></i>
-                                    </div>
+        // Function to view note details
+        function viewNoteDetails(noteId) {
+            fetch(`../api/get_note_details.php?id=${noteId}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        // Show note details in a modal or alert
+                        const note = data.note;
+                        const noteHtml = `
+                            <div class="bg-white p-6 rounded-lg max-w-2xl">
+                                <div class="flex justify-between items-start mb-4">
                                     <div>
-                                        <h3 class="text-2xl font-bold text-secondary">Successfully Saved!</h3>
-                                        <p class="text-gray-600">Patient information has been updated successfully.</p>
+                                        <h4 class="text-lg font-semibold text-gray-800">Consultation Note Details</h4>
+                                        <p class="text-sm text-gray-500">${formatDate(note.consultation_date)}</p>
                                     </div>
+                                    <button onclick="closeNoteDetails()" 
+                                            class="text-gray-400 hover:text-gray-600">
+                                        <i class="fas fa-times"></i>
+                                    </button>
                                 </div>
-                                <button onclick="closeSuccessModal()" class="text-gray-500 hover:text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-full w-10 h-10 flex items-center justify-center transition duration-200">
-                                    <i class="fas fa-times text-xl"></i>
-                                </button>
-                            </div>
-                        </div>
-                        
-                        <!-- Modal Body -->
-                        <div class="p-8 max-h-[60vh] overflow-y-auto">
-                            <!-- Patient Summary Card -->
-                            <div class="mb-8 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-6 border border-blue-100">
-                                <div class="flex items-center justify-between mb-4">
+                                
+                                <div class="space-y-4">
                                     <div>
-                                        <h4 class="text-lg font-bold text-secondary mb-1">${data.patient_name || 'Patient'}</h4>
-                                        <p class="text-sm text-gray-600">Patient ID: <span class="font-semibold text-primary">${data.patient_id || 'N/A'}</span></p>
-                                    </div>
-                                    <div class="text-right">
-                                        <div class="inline-block px-3 py-1 rounded-full text-sm font-medium ${data.patient_type && data.patient_type.includes('Registered') ? 'bg-success/20 text-success' : 'bg-info/20 text-info'}">
-                                            ${data.patient_type ? data.patient_type.replace(/<[^>]*>/g, '') : 'Patient Type'}
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">Note:</label>
+                                        <div class="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                                            ${note.note.replace(/\n/g, '<br>')}
                                         </div>
+                                    </div>
+                                    
+                                    ${note.next_consultation_date ? `
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">Next Consultation:</label>
+                                        <div class="text-primary font-medium">
+                                            ${formatDate(note.next_consultation_date)}
+                                        </div>
+                                    </div>
+                                    ` : ''}
+                                    
+                                    <div class="text-xs text-gray-500 mt-4 pt-4 border-t border-gray-200">
+                                        Created by: ${note.created_by_name || 'Staff'} 
+                                        on ${formatDateTime(note.created_at)}
                                     </div>
                                 </div>
                                 
-                                <div class="grid grid-cols-2 gap-4 text-sm">
-                                    <div class="space-y-1">
-                                        <p class="text-gray-500">Date of Birth</p>
-                                        <p class="font-medium">${data.date_of_birth || 'Not specified'}</p>
-                                    </div>
-                                    <div class="space-y-1">
-                                        <p class="text-gray-500">Age</p>
-                                        <p class="font-medium">${data.age || 'Not specified'}</p>
-                                    </div>
-                                    <div class="space-y-1">
-                                        <p class="text-gray-500">Gender</p>
-                                        <p class="font-medium">${data.gender || 'Not specified'}</p>
-                                    </div>
-                                    <div class="space-y-1">
-                                        <p class="text-gray-500">Last Check-up</p>
-                                        <p class="font-medium">${data.last_checkup || 'Not scheduled'}</p>
-                                    </div>
+                                <div class="mt-6 flex justify-end space-x-3">
+                                    <button onclick="closeNoteDetails()" 
+                                            class="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg">
+                                        Close
+                                    </button>
+                                    <button onclick="addSimilarNote(${noteId})" 
+                                            class="px-4 py-2 bg-primary text-white hover:bg-primary-dark rounded-lg">
+                                        <i class="fas fa-copy mr-1"></i> Use as Template
+                                    </button>
                                 </div>
                             </div>
-                            
-                            <!-- Medical Information Grid -->
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-                                <!-- Vital Signs -->
-                                <div class="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
-                                    <h5 class="text-lg font-bold text-secondary mb-4 flex items-center">
-                                        <i class="fas fa-heartbeat mr-2 text-danger"></i>Vital Signs
-                                    </h5>
-                                    <div class="space-y-4">
-                                        <div class="flex items-center justify-between">
-                                            <span class="text-gray-600">Height</span>
-                                            <span class="font-bold text-lg ${data.height !== 'Not provided' ? 'text-primary' : 'text-gray-400'}">
-                                                ${data.height || 'Not provided'}
-                                            </span>
-                                        </div>
-                                        <div class="flex items-center justify-between">
-                                            <span class="text-gray-600">Weight</span>
-                                            <span class="font-bold text-lg ${data.weight !== 'Not provided' ? 'text-primary' : 'text-gray-400'}">
-                                                ${data.weight || 'Not provided'}
-                                            </span>
-                                        </div>
-                                        <div class="flex items-center justify-between">
-                                            <span class="text-gray-600">Blood Pressure</span>
-                                            <span class="font-bold text-lg ${data.blood_pressure !== 'Not provided' ? 'text-warning' : 'text-gray-400'}">
-                                                ${data.blood_pressure || 'Not provided'}
-                                            </span>
-                                        </div>
-                                        <div class="flex items-center justify-between">
-                                            <span class="text-gray-600">Temperature</span>
-                                            <span class="font-bold text-lg ${data.temperature !== 'Not provided' ? 'text-danger' : 'text-gray-400'}">
-                                                ${data.temperature || 'Not provided'}
-                                            </span>
-                                        </div>
-                                    </div>
-                                </div>
-                                
-                                <!-- Medical Details -->
-                                <div class="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
-                                    <h5 class="text-lg font-bold text-secondary mb-4 flex items-center">
-                                        <i class="fas fa-stethoscope mr-2 text-primary"></i>Medical Details
-                                    </h5>
-                                    <div class="space-y-4">
-                                        <div class="flex items-center justify-between">
-                                            <span class="text-gray-600">Blood Type</span>
-                                            <span class="font-bold text-lg text-primary">
-                                                ${data.blood_type ? data.blood_type.replace(/<[^>]*>/g, '') : 'Not provided'}
-                                            </span>
-                                        </div>
-                                        <div class="text-center py-4">
-                                            <div class="inline-flex items-center justify-center w-24 h-24 rounded-full ${data.blood_type && data.blood_type !== 'Not provided' ? 'bg-red-50 border-2 border-red-200' : 'bg-gray-50 border-2 border-gray-200'}">
-                                                <span class="text-2xl font-bold ${data.blood_type && data.blood_type !== 'Not provided' ? 'text-danger' : 'text-gray-400'}">
-                                                    ${data.blood_type && data.blood_type !== 'Not provided' ? data.blood_type.replace(/<[^>]*>/g, '') : 'N/A'}
-                                                </span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                            
-                            <!-- Success Message -->
-                            <div class="bg-gradient-to-r from-success/5 to-success/10 rounded-xl p-6 border border-success/20">
-                                <div class="flex items-start space-x-3">
-                                    <i class="fas fa-info-circle text-xl text-success mt-1"></i>
-                                    <div>
-                                        <p class="text-sm text-gray-700 mb-2">
-                                            <strong>✓ Record Updated:</strong> Patient information has been securely saved to the database.
-                                        </p>
-                                        <div class="flex items-center justify-between text-xs text-gray-500">
-                                            <span>Saved by: <strong>${data.saved_by || 'Medical Staff'}</strong></span>
-                                            <span>${data.timestamp || 'Just now'}</span>
-                                        </div>
-                                    </div>
-                                </div>
+                        `;
+                        
+                        // Show in a modal
+                        showCustomModal(noteHtml, 'Note Details');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error loading note details:', error);
+                    showNotification('error', 'Unable to load note details.');
+                });
+        }
+
+        // Function to show note details in modal
+        function showNoteDetailsModal(note) {
+            const modalHtml = `
+                <div class="bg-white p-6 rounded-lg">
+                    <div class="flex justify-between items-start mb-6">
+                        <div>
+                            <h4 class="text-xl font-semibold text-gray-800">Consultation Note Details</h4>
+                            <p class="text-gray-500 mt-1">
+                                <i class="fas fa-calendar-day mr-1"></i>
+                                ${formatDate(note.consultation_date)}
+                            </p>
+                        </div>
+                        <button onclick="closeNoteDetailsModal()" 
+                                class="text-gray-400 hover:text-gray-600 text-xl">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                    
+                    <div class="space-y-6">
+                        <div>
+                            <h5 class="text-sm font-medium text-gray-700 mb-2">Consultation Notes:</h5>
+                            <div class="bg-gray-50 p-4 rounded-lg border border-gray-200 whitespace-pre-line">
+                                ${note.note}
                             </div>
                         </div>
                         
-                        <!-- Modal Footer -->
-                        <div class="p-6 bg-gray-50 border-t border-gray-200 flex justify-between items-center">
-                            <div class="text-sm text-gray-500">
-                                <i class="fas fa-shield-alt mr-1 text-primary"></i>
-                                Data is protected under RA 10173
-                            </div>
-                            <div class="flex space-x-3">
-                                <button onclick="printPatientRecordFromSuccess(${data.patient_id})" class="btn-print inline-flex items-center px-4 py-2">
-                                    <i class="fas fa-print mr-2"></i>Print Record
-                                </button>
-                                <button onclick="closeSuccessModal()" class="btn-primary inline-flex items-center px-6 py-2">
-                                    <i class="fas fa-check mr-2"></i>Done
-                                </button>
+                        ${note.next_consultation_date ? `
+                        <div class="bg-green-50 p-4 rounded-lg border border-green-200">
+                            <h5 class="text-sm font-medium text-green-700 mb-1">
+                                <i class="fas fa-calendar-check mr-1"></i>
+                                Next Consultation Date:
+                            </h5>
+                            <p class="text-green-800 font-medium">${formatDate(note.next_consultation_date)}</p>
+                        </div>
+                        ` : ''}
+                        
+                        <div class="pt-4 border-t border-gray-200">
+                            <div class="flex items-center text-sm text-gray-500">
+                                <i class="fas fa-user-md mr-2"></i>
+                                <span>Recorded by: ${note.created_by_name || 'Staff Member'}</span>
+                                <span class="mx-2">•</span>
+                                <i class="fas fa-clock mr-2"></i>
+                                <span>${formatDateTime(note.created_at)}</span>
                             </div>
                         </div>
                     </div>
+                    
+                    <div class="mt-8 flex justify-end space-x-3">
+                        <button onclick="closeNoteDetailsModal()" 
+                                class="px-4 py-2 border border-gray-300 text-gray-700 hover:bg-gray-50 rounded-lg">
+                            Close
+                        </button>
+                        <button onclick="useNoteAsTemplate(${note.id})" 
+                                class="px-4 py-2 bg-primary text-white hover:bg-primary-dark rounded-lg">
+                            <i class="fas fa-copy mr-1"></i> Use as Template
+                        </button>
+                    </div>
                 </div>
             `;
-
-            // Add modal to body
-            document.body.insertAdjacentHTML('beforeend', modalHTML);
-
-            // Auto-close modal after 8 seconds
+            
+            // Create or update modal
+            let modal = document.getElementById('noteDetailsModal');
+            if (!modal) {
+                modal = document.createElement('div');
+                modal.id = 'noteDetailsModal';
+                modal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-[9999]';
+                modal.style.display = 'none';
+                document.body.appendChild(modal);
+            }
+            
+            modal.innerHTML = `
+                <div class="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden">
+                    ${modalHtml}
+                </div>
+            `;
+            
+            // Show modal
+            modal.style.display = 'flex';
+            modal.style.opacity = '0';
             setTimeout(() => {
-                closeSuccessModal();
-            }, 8000);
+                modal.style.opacity = '1';
+                modal.style.transition = 'opacity 0.3s ease';
+            }, 10);
         }
 
-        // Function to close success modal
-        function closeSuccessModal() {
-            const modal = document.getElementById('successModal');
+        function closeNoteDetailsModal() {
+            const modal = document.getElementById('noteDetailsModal');
             if (modal) {
                 modal.style.opacity = '0';
-                modal.style.transition = 'opacity 0.3s ease';
                 setTimeout(() => {
-                    modal.remove();
+                    modal.style.display = 'none';
                 }, 300);
             }
         }
 
-        // Function to print patient record from success modal
-        function printPatientRecordFromSuccess(patientId) {
-            if (patientId) {
-                // Open the print patient page in a new window
-                const printWindow = window.open(`/community-health-tracker/api/print_patient.php?id=${patientId}`, '_blank', 'width=1200,height=800');
-                if (printWindow) {
-                    printWindow.focus();
-                    // Listen for the window to load and trigger print
-                    printWindow.onload = function () {
-                        // Give a small delay for everything to load
+        // Helper functions
+        function formatDate(dateString) {
+            const date = new Date(dateString);
+            return date.toLocaleDateString('en-US', {
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric'
+            });
+        }
+
+        function formatDateTime(dateTimeString) {
+            const date = new Date(dateTimeString);
+            return date.toLocaleDateString('en-US', {
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+        }
+
+        // Function to add a new note based on an existing one
+        function addSimilarNote(noteId) {
+            fetch(`../api/get_note_details.php?id=${noteId}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        const note = data.note;
+                        
+                        // Open consultation note modal with template data
+                        openConsultationNoteModal();
+                        
+                        // Fill the form with template data (after a short delay to ensure modal is open)
                         setTimeout(() => {
-                            printWindow.print();
-                        }, 1000);
-                    };
-                } else {
-                    showNotification('error', 'Please allow pop-ups for this site to print');
-                }
-            } else {
-                showNotification('error', 'No patient selected for printing');
+                            const noteTextarea = document.getElementById('note');
+                            if (noteTextarea) {
+                                noteTextarea.value = `Based on previous consultation on ${formatDate(note.consultation_date)}:\n\n${note.note}`;
+                            }
+                            
+                            // Set today's date as consultation date
+                            const today = new Date().toISOString().split('T')[0];
+                            const dateInput = document.getElementById('consultation_date');
+                            if (dateInput) dateInput.value = today;
+                            
+                            // Focus on the textarea
+                            if (noteTextarea) noteTextarea.focus();
+                        }, 300);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error loading note for template:', error);
+                    showNotification('error', 'Unable to load note for template.');
+                });
+        }
+
+        function showCustomModal(content, title) {
+            // Create modal if it doesn't exist
+            let modal = document.getElementById('customModal');
+            if (!modal) {
+                modal = document.createElement('div');
+                modal.id = 'customModal';
+                modal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-[9999] modal';
+                modal.style.display = 'none';
+                modal.innerHTML = `
+                    <div class="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden">
+                        <div id="customModalHeader" class="sticky top-0 bg-primary px-6 py-4 text-white flex justify-between items-center">
+                            <h3 class="text-lg font-semibold"></h3>
+                            <button onclick="closeCustomModal()" class="text-white hover:text-gray-200">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+                        <div id="customModalContent" class="p-6 overflow-y-auto max-h-[calc(90vh-80px)]">
+                        </div>
+                    </div>
+                `;
+                document.body.appendChild(modal);
+            }
+            
+            // Set content and title
+            document.getElementById('customModalContent').innerHTML = content;
+            document.querySelector('#customModalHeader h3').textContent = title;
+            
+            // Show modal
+            modal.style.display = 'flex';
+            modal.style.opacity = '0';
+            setTimeout(() => {
+                modal.style.opacity = '1';
+                modal.style.transition = 'opacity 0.3s ease';
+            }, 10);
+        }
+
+        function closeCustomModal() {
+            const modal = document.getElementById('customModal');
+            if (modal) {
+                modal.style.opacity = '0';
+                setTimeout(() => {
+                    modal.style.display = 'none';
+                }, 300);
             }
         }
 
-        // Add CSS animations for modal (run once)
-        if (!document.getElementById('successModalStyles')) {
-            const style = document.createElement('style');
-            style.id = 'successModalStyles';
-            style.textContent = `
-                @keyframes fadeIn {
-                    from { opacity: 0; }
-                    to { opacity: 1; }
-                }
-                
-                @keyframes scaleIn {
-                    from { transform: scale(0.95); opacity: 0; }
-                    to { transform: scale(1); opacity: 1; }
-                }
-                
-                .animate-fadeIn {
-                    animation: fadeIn 0.3s ease-out;
-                }
-                
-                .animate-scaleIn {
-                    animation: scaleIn 0.3s ease-out;
-                }
-                
-                /* Success Modal Specific Styles */
-                #successModal .btn-print {
-                    background-color: white;
-                    color: #3498db;
-                    border: 2px solid #3498db;
-                    opacity: 1;
-                    border-radius: 8px;
-                    padding: 10px 20px;
-                    transition: all 0.3s ease;
-                    font-weight: 500;
-                    min-height: 44px;
-                    display: inline-flex;
-                    align-items: center;
-                    justify-content: center;
-                    font-size: 14px;
-                }
-                
-                #successModal .btn-print:hover {
-                    background-color: #f0f9ff;
-                    border-color: #3498db;
-                    opacity: 0.6;
-                    transform: translateY(-2px);
-                    box-shadow: 0 4px 12px rgba(52, 152, 219, 0.15);
-                }
-                
-                #successModal .btn-primary {
-                    background-color: white;
-                    color: #2ecc71;
-                    border: 2px solid #2ecc71;
-                    opacity: 1;
-                    border-radius: 8px;
-                    padding: 10px 24px;
-                    transition: all 0.3s ease;
-                    font-weight: 500;
-                    min-height: 44px;
-                    display: inline-flex;
-                    align-items: center;
-                    justify-content: center;
-                    font-size: 14px;
-                }
-                
-                #successModal .btn-primary:hover {
-                    background-color: #f0fdf4;
-                    border-color: #2ecc71;
-                    opacity: 0.6;
-                    transform: translateY(-2px);
-                    box-shadow: 0 4px 12px rgba(46, 204, 113, 0.15);
-                }
-                
-                /* Additional animation styles */
-                .success-modal-bg {
-                    background: rgba(0, 0, 0, 0.7);
-                    backdrop-filter: blur(5px);
-                }
-                
-                /* Gradient backgrounds */
-                .bg-gradient-success {
-                    background: linear-gradient(135deg, #d4edda 0%, #f0fdf4 100%);
-                }
-                
-                .bg-gradient-blue {
-                    background: linear-gradient(135deg, #dbeafe 0%, #f0f9ff 100%);
-                }
-                
-                /* Pulse animation for important elements */
-                @keyframes pulse {
-                    0% { transform: scale(1); }
-                    50% { transform: scale(1.05); }
-                    100% { transform: scale(1); }
-                }
-                
-                .pulse-animation {
-                    animation: pulse 2s ease-in-out;
-                }
-                
-                /* Shake animation for error */
-                @keyframes shake {
-                    0%, 100% { transform: translateX(0); }
-                    25% { transform: translateX(-5px); }
-                    75% { transform: translateX(5px); }
-                }
-                
-                .shake-animation {
-                    animation: shake 0.5s ease-in-out;
-                }
-            `;
-            document.head.appendChild(style);
+        function closeNoteDetails() {
+            closeCustomModal();
         }
-
-        // Keyboard support for success modal
-        document.addEventListener('keydown', function (event) {
-            if (event.key === 'Escape') {
-                closeSuccessModal();
-            }
-        });
-
-        // Click outside to close
-        document.addEventListener('click', function (event) {
-            const modal = document.getElementById('successModal');
-            if (modal && event.target === modal) {
-                closeSuccessModal();
-            }
-        });
     </script>
 </body>
-
 </html>
