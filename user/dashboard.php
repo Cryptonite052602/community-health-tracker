@@ -1,4 +1,3 @@
-
 <?php
 // user/dashboard.php
 require_once __DIR__ . '/../includes/auth.php';
@@ -41,226 +40,161 @@ $analytics = [
 ];
 
 $healthIssuesData = [];
-$consultationTrends = [];
-$recentHealthUpdates = [];
+$activityLog = [];
+$announcementStats = ['accepted' => 0, 'dismissed' => 0, 'pending' => 0];
 
 if ($userData) {
     try {
-        // Check if user_health_issues table exists
-        $healthIssuesTableExists = false;
+        // 1. Get Health Issues Count (from sitio1_patients table)
         try {
-            $testStmt = $pdo->query("SELECT 1 FROM user_health_issues LIMIT 1");
-            $healthIssuesTableExists = true;
-        } catch (Exception $e) {
-            $healthIssuesTableExists = false;
-            if (empty($error)) {
-                $error = "Note: Health issues table not found. Using demo data.";
-            }
-        }
-        
-        if ($healthIssuesTableExists) {
-            // Get health issues count
             $stmt = $pdo->prepare("
                 SELECT COUNT(*) as count 
-                FROM user_health_issues 
-                WHERE user_id = ? AND status IN ('active', 'monitoring')
+                FROM sitio1_patients 
+                WHERE user_id = ? 
+                AND deleted_at IS NULL
             ");
             $stmt->execute([$userId]);
             $analytics['health_issues'] = $stmt->fetchColumn() ?: 0;
+        } catch (Exception $e) {
+            // Fallback if table doesn't exist
+            $analytics['health_issues'] = 0;
+            if (empty($error)) {
+                $error = "Note: Could not fetch health issues count. " . $e->getMessage();
+            }
+        }
 
-            // Get resolved health issues count
+        // 2. Get Announcements Count (from announcements and user_announcements tables)
+        try {
+            // First, get all announcements targeted to this user
             $stmt = $pdo->prepare("
-                SELECT COUNT(*) as count 
-                FROM user_health_issues 
-                WHERE user_id = ? AND status = 'resolved'
+                SELECT a.id 
+                FROM sitio1_announcements a
+                LEFT JOIN user_announcements ua ON a.id = ua.announcement_id AND ua.user_id = ?
+                LEFT JOIN sitio1_staff s ON a.staff_id = s.id
+                WHERE a.status = 'active'
+                AND (a.audience_type = 'public' OR a.id IN (
+                    SELECT announcement_id FROM announcement_targets WHERE user_id = ?
+                ))
             ");
-            $stmt->execute([$userId]);
-            $analytics['resolved_issues'] = $stmt->fetchColumn() ?: 0;
-
-            // Get pending health issues count
-            $stmt = $pdo->prepare("
-                SELECT COUNT(*) as count 
-                FROM user_health_issues 
-                WHERE user_id = ? AND status = 'pending'
-            ");
-            $stmt->execute([$userId]);
-            $analytics['pending_issues'] = $stmt->fetchColumn() ?: 0;
-
-            // Get health issues by category for chart
-            $stmt = $pdo->prepare("
-                SELECT 
-                    category,
-                    COUNT(*) as count,
-                    CASE 
-                        WHEN category = 'Chronic' THEN '#ef4444'
-                        WHEN category = 'Acute' THEN '#f59e0b'
-                        WHEN category = 'Preventive' THEN '#10b981'
-                        WHEN category = 'Follow-up' THEN '#3b82f6'
-                        ELSE '#6b7280'
-                    END as color
-                FROM user_health_issues 
-                WHERE user_id = ? 
-                GROUP BY category
-                ORDER BY count DESC
-            ");
-            $stmt->execute([$userId]);
-            $healthIssuesData = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-            // Get recent health updates
-            $stmt = $pdo->prepare("
-                SELECT 
-                    uhi.id,
-                    uhi.issue_type,
-                    uhi.description,
-                    uhi.status,
-                    uhi.created_at,
-                    uhi.resolved_at,
-                    s.full_name as staff_name
-                FROM user_health_issues uhi
-                LEFT JOIN sitio1_staff s ON uhi.assigned_staff_id = s.id
-                WHERE uhi.user_id = ?
-                ORDER BY uhi.created_at DESC
-                LIMIT 5
-            ");
-            $stmt->execute([$userId]);
-            $recentHealthUpdates = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        } else {
-            // Use demo data if table doesn't exist
-            $analytics['health_issues'] = 2;
-            $analytics['resolved_issues'] = 3;
-            $analytics['pending_issues'] = 1;
+            $stmt->execute([$userId, $userId]);
+            $announcements = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            $analytics['announcements'] = count($announcements);
             
-            // Demo health issues data
-            $healthIssuesData = [
-                ['category' => 'Chronic', 'count' => 1, 'color' => '#ef4444'],
-                ['category' => 'Acute', 'count' => 1, 'color' => '#f59e0b'],
-                ['category' => 'Preventive', 'count' => 2, 'color' => '#10b981'],
-            ];
+            // Get announcement statistics
+            $stmt = $pdo->prepare("
+                SELECT status, COUNT(*) as count 
+                FROM user_announcements 
+                WHERE user_id = ?
+                GROUP BY status
+            ");
+            $stmt->execute([$userId]);
+            $announcementStatsResult = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            
+            foreach ($announcementStatsResult as $stat) {
+                $announcementStats[$stat['status']] = (int)$stat['count'];
+            }
+            
+            // Calculate pending announcements
+            $announcementStats['pending'] = $analytics['announcements'] - 
+                                            ($announcementStats['accepted'] + $announcementStats['dismissed']);
+            
+        } catch (Exception $e) {
+            $analytics['announcements'] = 0;
+            if (empty($error)) {
+                $error .= " Note: Could not fetch announcements data.";
+            }
+        }
 
-            // Demo health updates
-            $recentHealthUpdates = [
+        // 3. Get Consultations Count (from consultation_notes table)
+        try {
+            // First, get all patients linked to this user
+            $stmt = $pdo->prepare("SELECT id FROM sitio1_patients WHERE user_id = ? AND deleted_at IS NULL");
+            $stmt->execute([$userId]);
+            $patientIds = $stmt->fetchAll(PDO::FETCH_COLUMN);
+            
+            if (!empty($patientIds)) {
+                $placeholders = str_repeat('?,', count($patientIds) - 1) . '?';
+                $stmt = $pdo->prepare("
+                    SELECT COUNT(*) 
+                    FROM consultation_notes 
+                    WHERE patient_id IN ($placeholders)
+                ");
+                $stmt->execute($patientIds);
+                $analytics['consultations'] = $stmt->fetchColumn() ?: 0;
+            }
+        } catch (Exception $e) {
+            $analytics['consultations'] = 0;
+            if (empty($error)) {
+                $error .= " Note: Could not fetch consultations data.";
+            }
+        }
+
+        // 4. Get Activity Log (user logins/logouts)
+        try {
+            // First check if user_activity_log table exists
+            $tableExists = false;
+            try {
+                $testStmt = $pdo->query("SELECT 1 FROM user_activity_log LIMIT 1");
+                $tableExists = true;
+            } catch (Exception $e) {
+                $tableExists = false;
+            }
+            
+            if ($tableExists) {
+                $stmt = $pdo->prepare("
+                    SELECT 
+                        action_type,
+                        action_timestamp,
+                        ip_address,
+                        user_agent
+                    FROM user_activity_log 
+                    WHERE user_id = ?
+                    AND action_type IN ('login', 'logout')
+                    ORDER BY action_timestamp DESC
+                    LIMIT 10
+                ");
+                $stmt->execute([$userId]);
+                $activityLog = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            } else {
+                // Create demo activity log
+                $activityLog = [
+                    [
+                        'action_type' => 'login',
+                        'action_timestamp' => date('Y-m-d H:i:s'),
+                        'ip_address' => '192.168.1.1',
+                        'user_agent' => 'Chrome/Windows'
+                    ],
+                    [
+                        'action_type' => 'logout',
+                        'action_timestamp' => date('Y-m-d H:i:s', strtotime('-2 hours')),
+                        'ip_address' => '192.168.1.1',
+                        'user_agent' => 'Chrome/Windows'
+                    ],
+                    [
+                        'action_type' => 'login',
+                        'action_timestamp' => date('Y-m-d H:i:s', strtotime('-1 day')),
+                        'ip_address' => '192.168.1.1',
+                        'user_agent' => 'Firefox/Windows'
+                    ]
+                ];
+            }
+        } catch (Exception $e) {
+            // Demo activity log on error
+            $activityLog = [
                 [
-                    'id' => 1,
-                    'issue_type' => 'Regular Check-up',
-                    'description' => 'Annual physical examination completed',
-                    'status' => 'resolved',
-                    'created_at' => date('Y-m-d', strtotime('-5 days')),
-                    'resolved_at' => date('Y-m-d', strtotime('-2 days')),
-                    'staff_name' => 'Dr. Smith'
-                ],
-                [
-                    'id' => 2,
-                    'issue_type' => 'Blood Pressure Monitoring',
-                    'description' => 'Monthly blood pressure check',
-                    'status' => 'active',
-                    'created_at' => date('Y-m-d', strtotime('-10 days')),
-                    'resolved_at' => null,
-                    'staff_name' => 'Nurse Johnson'
+                    'action_type' => 'login',
+                    'action_timestamp' => date('Y-m-d H:i:s'),
+                    'ip_address' => '192.168.1.1'
                 ]
             ];
         }
 
-        // Get announcements count (assuming this table exists)
-        try {
-            $stmt = $pdo->prepare("
-                SELECT COUNT(*) 
-                FROM sitio1_announcements a 
-                WHERE a.status = 'active'
-                AND (expiry_date IS NULL OR expiry_date >= CURDATE())
-                AND (
-                    a.audience_type = 'public'
-                    OR 
-                    (a.audience_type = 'specific' AND a.id IN (
-                        SELECT announcement_id 
-                        FROM announcement_targets 
-                        WHERE user_id = ?
-                    ))
-                )
-            ");
-            $stmt->execute([$userId]);
-            $analytics['announcements'] = $stmt->fetchColumn() ?: 0;
-        } catch (Exception $e) {
-            $analytics['announcements'] = 3; // Demo data
-        }
-
-        // Get consultations count (assuming this table exists)
-        try {
-            $stmt = $pdo->prepare("
-                SELECT COUNT(*) 
-                FROM sitio1_consultations 
-                WHERE user_id = ? 
-                AND created_at >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
-            ");
-            $stmt->execute([$userId]);
-            $analytics['consultations'] = $stmt->fetchColumn() ?: 0;
-        } catch (Exception $e) {
-            $analytics['consultations'] = 4; // Demo data
-        }
-
-        // Get consultation trends (last 7 days)
-        try {
-            $stmt = $pdo->prepare("
-                SELECT 
-                    DATE(created_at) as date,
-                    COUNT(*) as count,
-                    status
-                FROM sitio1_consultations 
-                WHERE user_id = ? 
-                AND created_at >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)
-                GROUP BY DATE(created_at), status
-                ORDER BY date ASC
-            ");
-            $stmt->execute([$userId]);
-            $consultationTrendsRaw = $stmt->fetchAll(PDO::FETCH_ASSOC);
-            
-            if (!empty($consultationTrendsRaw)) {
-                // Process consultation trends for chart
-                $dates = [];
-                for ($i = 6; $i >= 0; $i--) {
-                    $date = date('Y-m-d', strtotime("-$i days"));
-                    $dates[$date] = [
-                        'date' => date('M d', strtotime($date)),
-                        'completed' => 0,
-                        'pending' => 0,
-                        'cancelled' => 0
-                    ];
-                }
-
-                foreach ($consultationTrendsRaw as $trend) {
-                    $date = $trend['date'];
-                    if (isset($dates[$date])) {
-                        $dates[$date][$trend['status']] = (int)$trend['count'];
-                    }
-                }
-
-                $consultationTrends = array_values($dates);
-            } else {
-                // Demo consultation trends data
-                $consultationTrends = [];
-                for ($i = 6; $i >= 0; $i--) {
-                    $date = date('M d', strtotime("-$i days"));
-                    $consultationTrends[] = [
-                        'date' => $date,
-                        'completed' => rand(0, 2),
-                        'pending' => rand(0, 1),
-                        'cancelled' => rand(0, 1)
-                    ];
-                }
-            }
-            
-        } catch (Exception $e) {
-            // Demo consultation trends data
-            $consultationTrends = [];
-            for ($i = 6; $i >= 0; $i--) {
-                $date = date('M d', strtotime("-$i days"));
-                $consultationTrends[] = [
-                    'date' => $date,
-                    'completed' => rand(0, 2),
-                    'pending' => rand(0, 1),
-                    'cancelled' => rand(0, 1)
-                ];
-            }
-        }
+        // Prepare data for donut chart (Health Issues, Announcements, Consultations)
+        $chartData = [
+            ['category' => 'Health Issues', 'count' => $analytics['health_issues'], 'color' => '#ef4444'],
+            ['category' => 'Announcements', 'count' => $analytics['announcements'], 'color' => '#3b82f6'],
+            ['category' => 'Consultations', 'count' => $analytics['consultations'], 'color' => '#10b981']
+        ];
 
     } catch (PDOException $e) {
         $error = 'Error fetching analytics data: ' . $e->getMessage();
@@ -281,31 +215,13 @@ if ($userData) {
     <!-- Chart.js Library -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        .fixed {
-            position: fixed;
-        }
-        .inset-0 {
-            top: 0;
-            right: 0;
-            bottom: 0;
-            left: 0;
-        }
-        .hidden {
-            display: none;
-        }
-        .z-50 {
-            z-index: 50;
-        }
-
-        /* Tab styling */
-        .tab-content {
-            display: none;
-        }
-        .tab-content.active {
-            display: block;
-        }
-
-        /* Stats card styling */
+        /* Existing styles remain the same */
+        .fixed { position: fixed; }
+        .inset-0 { top: 0; right: 0; bottom: 0; left: 0; }
+        .hidden { display: none; }
+        .z-50 { z-index: 50; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
         .stats-card {
             background: white;
             border-radius: 12px;
@@ -314,13 +230,10 @@ if ($userData) {
             transition: all 0.3s ease;
             border: 1px solid #e5e7eb;
         }
-
         .stats-card:hover {
             transform: translateY(-2px);
             box-shadow: 0 8px 15px rgba(0, 0, 0, 0.1);
         }
-
-        /* Chart container */
         .chart-container {
             background: white;
             border-radius: 12px;
@@ -328,32 +241,15 @@ if ($userData) {
             box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
             border: 1px solid #e5e7eb;
         }
-
-        /* Tab active state */
         .tab-active {
             border-bottom: 2px solid #3b82f6;
             color: #2563eb;
         }
-
-        /* Dashboard stats styling */
-        .dashboard-stats {
-            margin-bottom: 2rem;
-        }
-
-        /* Blue theme for consistency */
         .blue-theme-bg {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         }
-
-        .blue-theme-text {
-            color: #3b82f6;
-        }
-
-        .blue-theme-border {
-            border-color: #3b82f6;
-        }
-
-        /* Count badge styling */
+        .blue-theme-text { color: #3b82f6; }
+        .blue-theme-border { border-color: #3b82f6; }
         .count-badge {
             display: inline-flex;
             align-items: center;
@@ -366,27 +262,12 @@ if ($userData) {
             padding: 0 0.6rem;
             margin-left: 0.5rem;
         }
-
-        /* Info card styling */
         .info-card {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
             border-radius: 16px;
             padding: 20px;
         }
-        
-        .info-card h3 {
-            color: white;
-            margin-bottom: 15px;
-        }
-        
-        .info-card p {
-            color: rgba(255, 255, 255, 0.9);
-            margin-bottom: 10px;
-            font-size: 14px;
-        }
-
-        /* Custom scrollbar */
         .custom-scrollbar::-webkit-scrollbar {
             width: 4px;
         }
@@ -397,6 +278,13 @@ if ($userData) {
             background: #cbd5e1;
             border-radius: 10px;
         }
+        .activity-log-item {
+            border-left: 3px solid;
+            padding-left: 1rem;
+            margin-bottom: 1rem;
+        }
+        .activity-log-item.login { border-color: #10b981; }
+        .activity-log-item.logout { border-color: #ef4444; }
     </style>
 </head>
 <body class="bg-gray-100">
@@ -448,30 +336,24 @@ if ($userData) {
             <!-- Health Analytics Dashboard -->
             <div class="space-y-8">
                 <!-- Stats Overview Cards -->
-                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     <!-- Health Issues Card -->
                     <div class="stats-card">
                         <div class="flex items-center">
                             <div class="w-12 h-12 bg-red-100 rounded-lg flex items-center justify-center mr-4">
-                                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 01118 0z" />
-                                </svg>
+                                <i class="fas fa-heartbeat text-red-600 text-xl"></i>
                             </div>
                             <div>
-                                <h3 class="text-lg font-semibold text-gray-700">Health Issues</h3>
+                                <h3 class="text-lg font-semibold text-gray-700">Health Records</h3>
                                 <p class="text-3xl font-bold text-red-600"><?= $analytics['health_issues'] ?></p>
-                                <p class="text-sm text-gray-500 mt-1">Active & Monitoring</p>
+                                <p class="text-sm text-gray-500 mt-1">Linked patient records</p>
                             </div>
                         </div>
-                        <div class="mt-4 flex items-center justify-between">
-                            <span class="text-sm text-green-600 font-medium">
-                                <i class="fas fa-check-circle mr-1"></i>
-                                <?= $analytics['resolved_issues'] ?> Resolved
-                            </span>
-                            <span class="text-sm text-yellow-600 font-medium">
-                                <i class="fas fa-clock mr-1"></i>
-                                <?= $analytics['pending_issues'] ?> Pending
-                            </span>
+                        <div class="mt-4">
+                            <a href="profile.php" class="text-sm text-red-600 font-medium hover:text-red-800 flex items-center">
+                                <i class="fas fa-external-link-alt mr-1"></i>
+                                View health records
+                            </a>
                         </div>
                     </div>
 
@@ -479,9 +361,7 @@ if ($userData) {
                     <div class="stats-card">
                         <div class="flex items-center">
                             <div class="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center mr-4">
-                                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-                                </svg>
+                                <i class="fas fa-bullhorn text-blue-600 text-xl"></i>
                             </div>
                             <div>
                                 <h3 class="text-lg font-semibold text-gray-700">Announcements</h3>
@@ -490,10 +370,16 @@ if ($userData) {
                             </div>
                         </div>
                         <div class="mt-4">
-                            <a href="#" class="text-sm text-blue-600 font-medium hover:text-blue-800 flex items-center">
-                                <i class="fas fa-external-link-alt mr-1"></i>
-                                View all announcements
-                            </a>
+                            <div class="flex justify-between text-sm">
+                                <span class="text-green-600 font-medium">
+                                    <i class="fas fa-check-circle mr-1"></i>
+                                    <?= $announcementStats['accepted'] ?> Accepted
+                                </span>
+                                <span class="text-yellow-600 font-medium">
+                                    <i class="fas fa-clock mr-1"></i>
+                                    <?= $announcementStats['pending'] ?> Pending
+                                </span>
+                            </div>
                         </div>
                     </div>
 
@@ -501,223 +387,141 @@ if ($userData) {
                     <div class="stats-card">
                         <div class="flex items-center">
                             <div class="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center mr-4">
-                                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                                </svg>
+                                <i class="fas fa-file-medical-alt text-green-600 text-xl"></i>
                             </div>
                             <div>
                                 <h3 class="text-lg font-semibold text-gray-700">Consultations</h3>
                                 <p class="text-3xl font-bold text-green-600"><?= $analytics['consultations'] ?></p>
-                                <p class="text-sm text-gray-500 mt-1">Last 30 days</p>
+                                <p class="text-sm text-gray-500 mt-1">Total consultation notes</p>
                             </div>
                         </div>
                         <div class="mt-4">
-                            <a href="#" class="text-sm text-green-600 font-medium hover:text-green-800 flex items-center">
+                            <a href="profile.php" class="text-sm text-green-600 font-medium hover:text-green-800 flex items-center">
                                 <i class="fas fa-history mr-1"></i>
                                 View consultation history
                             </a>
                         </div>
                     </div>
-
-                    <!-- Health Score Card -->
-                    <div class="stats-card">
-                        <div class="flex items-center">
-                            <div class="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center mr-4">
-                                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z" />
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.488 9H15V3.512A9.025 9.025 0 0120.488 9z" />
-                                </svg>
-                            </div>
-                            <div>
-                                <h3 class="text-lg font-semibold text-gray-700">Health Score</h3>
-                                <p class="text-3xl font-bold text-purple-600">
-                                    <?php 
-                                        $score = 100 - ($analytics['health_issues'] * 5);
-                                        echo max(60, min(100, $score));
-                                    ?>
-                                </p>
-                                <p class="text-sm text-gray-500 mt-1">Overall wellness</p>
-                            </div>
-                        </div>
-                        <div class="mt-4">
-                            <div class="w-full bg-gray-200 rounded-full h-2">
-                                <div class="bg-purple-600 h-2 rounded-full" style="width: <?= max(60, min(100, $score)) ?>%"></div>
-                            </div>
-                        </div>
-                    </div>
                 </div>
 
-                <!-- Charts Section -->
+                <!-- Charts and Activity Log Section -->
                 <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    <!-- Health Issues by Category (Donut Chart) -->
+                    <!-- Donut Chart -->
                     <div class="chart-container">
                         <h3 class="text-lg font-semibold text-gray-800 mb-4 flex items-center">
-                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-red-500 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z" />
-                            </svg>
-                            Health Issues by Category
+                            <i class="fas fa-chart-pie text-blue-500 mr-2"></i>
+                            Health Overview Distribution
                         </h3>
                         <div class="h-64">
-                            <canvas id="healthIssuesChart"></canvas>
+                            <canvas id="overviewChart"></canvas>
                         </div>
-                        <?php if (!empty($healthIssuesData)): ?>
-                            <div class="mt-4 grid grid-cols-2 gap-2">
-                                <?php foreach ($healthIssuesData as $category): ?>
-                                    <div class="flex items-center">
-                                        <div class="w-3 h-3 rounded-full mr-2" style="background-color: <?= $category['color'] ?>"></div>
-                                        <span class="text-sm text-gray-700"><?= htmlspecialchars($category['category']) ?></span>
-                                        <span class="ml-auto text-sm font-semibold" style="color: <?= $category['color'] ?>"><?= $category['count'] ?></span>
-                                    </div>
-                                <?php endforeach; ?>
-                            </div>
-                        <?php else: ?>
-                            <div class="h-64 flex items-center justify-center">
-                                <div class="text-center">
-                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 mx-auto text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 01118 0z" />
-                                    </svg>
-                                    <p class="text-gray-500 mt-2">No health issues data available</p>
-                                </div>
-                            </div>
-                        <?php endif; ?>
-                    </div>
-
-                    <!-- Consultation Trends (Bar Chart) -->
-                    <div class="chart-container">
-                        <h3 class="text-lg font-semibold text-gray-800 mb-4 flex items-center">
-                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-blue-500 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                            </svg>
-                            Consultation Trends (7 Days)
-                        </h3>
-                        <div class="h-64">
-                            <canvas id="consultationTrendsChart"></canvas>
-                        </div>
-                        <?php if (!empty($consultationTrends)): ?>
-                            <div class="mt-4 flex justify-center space-x-4">
+                        <div class="mt-4 grid grid-cols-3 gap-2">
+                            <?php foreach ($chartData as $item): ?>
                                 <div class="flex items-center">
-                                    <div class="w-3 h-3 bg-green-500 rounded-full mr-2"></div>
-                                    <span class="text-sm text-gray-700">Completed</span>
-                                </div>
-                                <div class="flex items-center">
-                                    <div class="w-3 h-3 bg-yellow-500 rounded-full mr-2"></div>
-                                    <span class="text-sm text-gray-700">Pending</span>
-                                </div>
-                                <div class="flex items-center">
-                                    <div class="w-3 h-3 bg-red-500 rounded-full mr-2"></div>
-                                    <span class="text-sm text-gray-700">Cancelled</span>
-                                </div>
-                            </div>
-                        <?php else: ?>
-                            <div class="h-64 flex items-center justify-center">
-                                <div class="text-center">
-                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 mx-auto text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                                    </svg>
-                                    <p class="text-gray-500 mt-2">No consultation data available</p>
-                                </div>
-                            </div>
-                        <?php endif; ?>
-                    </div>
-                </div>
-
-                <!-- Recent Health Updates -->
-                <div class="chart-container">
-                    <h3 class="text-lg font-semibold text-gray-800 mb-4 flex items-center">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-green-500 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
-                        </svg>
-                        Recent Health Updates
-                    </h3>
-                    <div class="space-y-4">
-                        <?php if (!empty($recentHealthUpdates)): ?>
-                            <?php foreach ($recentHealthUpdates as $update): ?>
-                                <div class="border border-gray-200 rounded-lg p-4 hover:shadow-md transition">
-                                    <div class="flex justify-between items-start">
-                                        <div>
-                                            <h4 class="font-semibold text-gray-800">
-                                                <?= htmlspecialchars($update['issue_type']) ?>
-                                            </h4>
-                                            <p class="text-sm text-gray-600 mt-1">
-                                                <?= htmlspecialchars($update['description']) ?>
-                                            </p>
-                                            <div class="flex items-center mt-2 space-x-4">
-                                                <span class="text-xs px-2 py-1 rounded-full 
-                                                    <?= $update['status'] === 'resolved' ? 'bg-green-100 text-green-800' : 
-                                                       ($update['status'] === 'pending' ? 'bg-yellow-100 text-yellow-800' : 
-                                                       'bg-blue-100 text-blue-800') ?>">
-                                                    <?= ucfirst($update['status']) ?>
-                                                </span>
-                                                <span class="text-xs text-gray-500">
-                                                    <i class="far fa-clock mr-1"></i>
-                                                    <?= date('M d, Y', strtotime($update['created_at'])) ?>
-                                                </span>
-                                                <?php if (!empty($update['staff_name'])): ?>
-                                                    <span class="text-xs text-gray-500">
-                                                        <i class="fas fa-user-md mr-1"></i>
-                                                        <?= htmlspecialchars($update['staff_name']) ?>
-                                                    </span>
-                                                <?php endif; ?>
-                                            </div>
-                                        </div>
-                                        <?php if ($update['status'] === 'resolved' && $update['resolved_at']): ?>
-                                            <div class="text-right">
-                                                <span class="text-xs text-green-600 font-medium">
-                                                    <i class="fas fa-check-circle mr-1"></i>
-                                                    Resolved
-                                                </span>
-                                                <p class="text-xs text-gray-500 mt-1">
-                                                    <?= date('M d, Y', strtotime($update['resolved_at'])) ?>
-                                                </p>
-                                            </div>
-                                        <?php endif; ?>
-                                    </div>
+                                    <div class="w-3 h-3 rounded-full mr-2" style="background-color: <?= $item['color'] ?>"></div>
+                                    <span class="text-sm text-gray-700"><?= $item['category'] ?></span>
+                                    <span class="ml-auto text-sm font-semibold" style="color: <?= $item['color'] ?>"><?= $item['count'] ?></span>
                                 </div>
                             <?php endforeach; ?>
-                        <?php else: ?>
-                            <div class="text-center py-8">
-                                <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 mx-auto text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 01118 0z" />
-                                </svg>
-                                <p class="text-gray-500 mt-2">No recent health updates</p>
-                            </div>
-                        <?php endif; ?>
+                        </div>
+                    </div>
+
+                    <!-- Activity Log -->
+                    <div class="chart-container">
+                        <h3 class="text-lg font-semibold text-gray-800 mb-4 flex items-center">
+                            <i class="fas fa-history text-purple-500 mr-2"></i>
+                            Recent Activity Log
+                        </h3>
+                        <div class="max-h-64 overflow-y-auto custom-scrollbar">
+                            <?php if (!empty($activityLog)): ?>
+                                <div class="space-y-3">
+                                    <?php foreach ($activityLog as $activity): ?>
+                                        <div class="activity-log-item <?= $activity['action_type'] ?>">
+                                            <div class="flex justify-between items-start">
+                                                <div>
+                                                    <h4 class="font-medium text-gray-800">
+                                                        <?php if ($activity['action_type'] == 'login'): ?>
+                                                            <i class="fas fa-sign-in-alt text-green-500 mr-1"></i>
+                                                            Account Login
+                                                        <?php else: ?>
+                                                            <i class="fas fa-sign-out-alt text-red-500 mr-1"></i>
+                                                            Account Logout
+                                                        <?php endif; ?>
+                                                    </h4>
+                                                    <p class="text-sm text-gray-600 mt-1">
+                                                        <?= date('M d, Y h:i A', strtotime($activity['action_timestamp'])) ?>
+                                                    </p>
+                                                    <?php if (!empty($activity['ip_address'])): ?>
+                                                        <p class="text-xs text-gray-500 mt-1">
+                                                            <i class="fas fa-network-wired mr-1"></i>
+                                                            IP: <?= htmlspecialchars($activity['ip_address']) ?>
+                                                        </p>
+                                                    <?php endif; ?>
+                                                </div>
+                                                <span class="text-xs px-2 py-1 rounded-full 
+                                                    <?= $activity['action_type'] === 'login' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800' ?>">
+                                                    <?= ucfirst($activity['action_type']) ?>
+                                                </span>
+                                            </div>
+                                        </div>
+                                    <?php endforeach; ?>
+                                </div>
+                            <?php else: ?>
+                                <div class="text-center py-8">
+                                    <i class="fas fa-history text-4xl text-gray-300 mb-4"></i>
+                                    <p class="text-gray-500">No recent activity found</p>
+                                </div>
+                            <?php endif; ?>
+                        </div>
                     </div>
                 </div>
 
-                <!-- Quick Insights Card -->
-                <div class="info-card">
-                    <h3 class="text-white mb-4 text-lg font-semibold flex items-center">
-                        <i class="fas fa-lightbulb mr-2"></i>
-                        Health Insights
+                <!-- Announcement Response Stats -->
+                <div class="chart-container">
+                    <h3 class="text-lg font-semibold text-gray-800 mb-4 flex items-center">
+                        <i class="fas fa-bell text-yellow-500 mr-2"></i>
+                        Announcement Response Statistics
                     </h3>
-                    <div class="space-y-3">
-                        <p class="text-white text-sm flex items-start">
-                            <i class="fas fa-check-circle mt-1 mr-2 text-green-300"></i>
-                            <span>You have <?= $analytics['resolved_issues'] ?> resolved health issues. Great progress!</span>
-                        </p>
-                        <p class="text-white text-sm flex items-start">
-                            <i class="fas fa-bell mt-1 mr-2 text-yellow-300"></i>
-                            <span>There are <?= $analytics['announcements'] ?> important announcements for you.</span>
-                        </p>
-                        <p class="text-white text-sm flex items-start">
-                            <i class="fas fa-calendar-alt mt-1 mr-2 text-blue-300"></i>
-                            <span>You've had <?= $analytics['consultations'] ?> consultations in the last 30 days.</span>
-                        </p>
-                        <?php if ($analytics['pending_issues'] > 0): ?>
-                            <p class="text-white text-sm flex items-start">
-                                <i class="fas fa-exclamation-triangle mt-1 mr-2 text-red-300"></i>
-                                <span>You have <?= $analytics['pending_issues'] ?> pending health issues requiring attention.</span>
-                            </p>
-                        <?php endif; ?>
-                    </div>
-                    <div class="mt-6">
-                        <a href="#" class="bg-white text-blue-600 px-6 py-3 rounded-full font-semibold hover:bg-gray-100 transition duration-200 inline-flex items-center">
-                            <i class="fas fa-chart-line mr-2"></i>
-                            View Detailed Reports
-                        </a>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div class="bg-green-50 border border-green-200 rounded-lg p-4">
+                            <div class="flex items-center">
+                                <div class="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mr-4">
+                                    <i class="fas fa-check text-green-600 text-xl"></i>
+                                </div>
+                                <div>
+                                    <p class="text-2xl font-bold text-green-800"><?= $announcementStats['accepted'] ?></p>
+                                    <p class="text-sm text-green-600">Accepted</p>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                            <div class="flex items-center">
+                                <div class="w-12 h-12 bg-yellow-100 rounded-full flex items-center justify-center mr-4">
+                                    <i class="fas fa-clock text-yellow-600 text-xl"></i>
+                                </div>
+                                <div>
+                                    <p class="text-2xl font-bold text-yellow-800"><?= $announcementStats['pending'] ?></p>
+                                    <p class="text-sm text-yellow-600">Pending Response</p>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="bg-gray-100 border border-gray-300 rounded-lg p-4">
+                            <div class="flex items-center">
+                                <div class="w-12 h-12 bg-gray-200 rounded-full flex items-center justify-center mr-4">
+                                    <i class="fas fa-times text-gray-600 text-xl"></i>
+                                </div>
+                                <div>
+                                    <p class="text-2xl font-bold text-gray-800"><?= $announcementStats['dismissed'] ?></p>
+                                    <p class="text-sm text-gray-600">Dismissed</p>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
+
+                
             </div>
         </div>
     </div>
@@ -744,38 +548,38 @@ if ($userData) {
                             <i class="fas fa-heartbeat text-red-600"></i>
                         </div>
                         <div>
-                            <h4 class="font-semibold text-gray-800 text-lg mb-2">Health Issues Tracking</h4>
-                            <p class="text-gray-600">Monitor your active and resolved health conditions. The donut chart shows distribution by category.</p>
+                            <h4 class="font-semibold text-gray-800 text-lg mb-2">Health Records</h4>
+                            <p class="text-gray-600">Number of patient profiles linked to your account from the sitio1_patients table.</p>
                         </div>
                     </div>
 
                     <div class="flex items-start">
                         <div class="flex-shrink-0 w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center mr-4">
-                            <i class="fas fa-chart-bar text-blue-600"></i>
+                            <i class="fas fa-bullhorn text-blue-600"></i>
                         </div>
                         <div>
-                            <h4 class="font-semibold text-gray-800 text-lg mb-2">Consultation Trends</h4>
-                            <p class="text-gray-600">Track your consultation patterns over the last 7 days. See completed, pending, and cancelled appointments.</p>
+                            <h4 class="font-semibold text-gray-800 text-lg mb-2">Announcements</h4>
+                            <p class="text-gray-600">Active announcements targeted to you. Track your responses and pending items.</p>
                         </div>
                     </div>
 
                     <div class="flex items-start">
                         <div class="flex-shrink-0 w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center mr-4">
-                            <i class="fas fa-bullhorn text-green-600"></i>
+                            <i class="fas fa-file-medical-alt text-green-600"></i>
                         </div>
                         <div>
-                            <h4 class="font-semibold text-gray-800 text-lg mb-2">Announcements</h4>
-                            <p class="text-gray-600">Stay updated with important health announcements and community updates relevant to you.</p>
+                            <h4 class="font-semibold text-gray-800 text-lg mb-2">Consultations</h4>
+                            <p class="text-gray-600">Total consultation notes from all linked patient profiles in the consultation_notes table.</p>
                         </div>
                     </div>
 
                     <div class="flex items-start">
                         <div class="flex-shrink-0 w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center mr-4">
-                            <i class="fas fa-chart-line text-purple-600"></i>
+                            <i class="fas fa-history text-purple-600"></i>
                         </div>
                         <div>
-                            <h4 class="font-semibold text-gray-800 text-lg mb-2">Health Score</h4>
-                            <p class="text-gray-600">Your overall wellness score based on active health issues and consultation patterns.</p>
+                            <h4 class="font-semibold text-gray-800 text-lg mb-2">Activity Log</h4>
+                            <p class="text-gray-600">Track your login and logout activities with timestamps and IP addresses.</p>
                         </div>
                     </div>
                 </div>
@@ -793,97 +597,39 @@ if ($userData) {
     <script>
         // Initialize Charts
         document.addEventListener('DOMContentLoaded', function() {
-            // Health Issues Donut Chart
-            <?php if (!empty($healthIssuesData)): ?>
-                const healthIssuesCtx = document.getElementById('healthIssuesChart').getContext('2d');
-                const healthIssuesChart = new Chart(healthIssuesCtx, {
-                    type: 'doughnut',
-                    data: {
-                        labels: <?= json_encode(array_column($healthIssuesData, 'category')) ?>,
-                        datasets: [{
-                            data: <?= json_encode(array_column($healthIssuesData, 'count')) ?>,
-                            backgroundColor: <?= json_encode(array_column($healthIssuesData, 'color')) ?>,
-                            borderWidth: 2,
-                            borderColor: '#ffffff'
-                        }]
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        plugins: {
-                            legend: {
-                                display: false
-                            },
-                            tooltip: {
-                                callbacks: {
-                                    label: function(context) {
-                                        return `${context.label}: ${context.raw} issues`;
-                                    }
-                                }
-                            }
+            // Overview Donut Chart
+            const chartData = <?= json_encode($chartData) ?>;
+            
+            const overviewCtx = document.getElementById('overviewChart').getContext('2d');
+            const overviewChart = new Chart(overviewCtx, {
+                type: 'doughnut',
+                data: {
+                    labels: chartData.map(item => item.category),
+                    datasets: [{
+                        data: chartData.map(item => item.count),
+                        backgroundColor: chartData.map(item => item.color),
+                        borderWidth: 2,
+                        borderColor: '#ffffff'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false
                         },
-                        cutout: '70%'
-                    }
-                });
-            <?php endif; ?>
-
-            // Consultation Trends Bar Chart
-            <?php if (!empty($consultationTrends)): ?>
-                const trendsCtx = document.getElementById('consultationTrendsChart').getContext('2d');
-                const consultationTrendsChart = new Chart(trendsCtx, {
-                    type: 'bar',
-                    data: {
-                        labels: <?= json_encode(array_column($consultationTrends, 'date')) ?>,
-                        datasets: [
-                            {
-                                label: 'Completed',
-                                data: <?= json_encode(array_column($consultationTrends, 'completed')) ?>,
-                                backgroundColor: '#10b981',
-                                borderColor: '#10b981',
-                                borderWidth: 1
-                            },
-                            {
-                                label: 'Pending',
-                                data: <?= json_encode(array_column($consultationTrends, 'pending')) ?>,
-                                backgroundColor: '#f59e0b',
-                                borderColor: '#f59e0b',
-                                borderWidth: 1
-                            },
-                            {
-                                label: 'Cancelled',
-                                data: <?= json_encode(array_column($consultationTrends, 'cancelled')) ?>,
-                                backgroundColor: '#ef4444',
-                                borderColor: '#ef4444',
-                                borderWidth: 1
-                            }
-                        ]
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        scales: {
-                            x: {
-                                stacked: true,
-                                grid: {
-                                    display: false
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return `${context.label}: ${context.raw}`;
                                 }
-                            },
-                            y: {
-                                stacked: true,
-                                beginAtZero: true,
-                                ticks: {
-                                    stepSize: 1
-                                }
-                            }
-                        },
-                        plugins: {
-                            legend: {
-                                display: false
                             }
                         }
-                    }
-                });
-            <?php endif; ?>
+                    },
+                    cutout: '70%'
+                }
+            });
         });
 
         // Help modal functions
