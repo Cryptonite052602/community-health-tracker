@@ -43,6 +43,13 @@ $healthIssuesData = [];
 $activityLog = [];
 $announcementStats = ['accepted' => 0, 'dismissed' => 0, 'pending' => 0];
 
+// Initialize chartData with defaults BEFORE the if block
+$chartData = [
+    ['category' => 'Health Records', 'count' => 0, 'color' => '#ef4444', 'icon' => 'fas fa-heartbeat'],
+    ['category' => 'Announcements', 'count' => 0, 'color' => '#3b82f6', 'icon' => 'fas fa-bullhorn'],
+    ['category' => 'Consultations', 'count' => 0, 'color' => '#10b981', 'icon' => 'fas fa-file-medical-alt']
+];
+
 if ($userData) {
     try {
         // 1. Get Health Issues Count (from sitio1_patients table)
@@ -162,42 +169,120 @@ if ($userData) {
                         'action_type' => 'login',
                         'action_timestamp' => date('Y-m-d H:i:s'),
                         'ip_address' => '192.168.1.1',
-                        'user_agent' => 'Chrome/Windows'
+                        'user_agent' => 'Chrome/Windows',
+                        'browser' => 'Chrome',
+                        'device' => 'Desktop'
                     ],
                     [
                         'action_type' => 'logout',
                         'action_timestamp' => date('Y-m-d H:i:s', strtotime('-2 hours')),
                         'ip_address' => '192.168.1.1',
-                        'user_agent' => 'Chrome/Windows'
+                        'user_agent' => 'Chrome/Windows',
+                        'browser' => 'Chrome',
+                        'device' => 'Desktop'
                     ],
                     [
                         'action_type' => 'login',
                         'action_timestamp' => date('Y-m-d H:i:s', strtotime('-1 day')),
                         'ip_address' => '192.168.1.1',
-                        'user_agent' => 'Firefox/Windows'
+                        'user_agent' => 'Firefox/Windows',
+                        'browser' => 'Firefox',
+                        'device' => 'Desktop'
+                    ],
+                    [
+                        'action_type' => 'login',
+                        'action_timestamp' => date('Y-m-d H:i:s', strtotime('-3 days')),
+                        'ip_address' => '192.168.1.100',
+                        'user_agent' => 'Mobile Safari',
+                        'browser' => 'Safari',
+                        'device' => 'Mobile'
+                    ],
+                    [
+                        'action_type' => 'logout',
+                        'action_timestamp' => date('Y-m-d H:i:s', strtotime('-4 days')),
+                        'ip_address' => '192.168.1.100',
+                        'user_agent' => 'Mobile Safari',
+                        'browser' => 'Safari',
+                        'device' => 'Mobile'
                     ]
                 ];
             }
+            
+            // Process activity log for better display
+            foreach ($activityLog as &$activity) {
+                if (!isset($activity['browser'])) {
+                    // Parse user agent to get browser info
+                    $ua = $activity['user_agent'] ?? '';
+                    if (stripos($ua, 'chrome') !== false) {
+                        $activity['browser'] = 'Chrome';
+                    } elseif (stripos($ua, 'firefox') !== false) {
+                        $activity['browser'] = 'Firefox';
+                    } elseif (stripos($ua, 'safari') !== false) {
+                        $activity['browser'] = 'Safari';
+                    } else {
+                        $activity['browser'] = 'Browser';
+                    }
+                    
+                    if (stripos($ua, 'mobile') !== false || stripos($ua, 'android') !== false || stripos($ua, 'iphone') !== false) {
+                        $activity['device'] = 'Mobile';
+                    } else {
+                        $activity['device'] = 'Desktop';
+                    }
+                }
+                
+                // Format time
+                $activity['formatted_time'] = date('h:i A', strtotime($activity['action_timestamp']));
+                $activity['formatted_date'] = date('M d, Y', strtotime($activity['action_timestamp']));
+                $activity['time_ago'] = getTimeAgo($activity['action_timestamp']);
+            }
+            
         } catch (Exception $e) {
             // Demo activity log on error
             $activityLog = [
                 [
                     'action_type' => 'login',
                     'action_timestamp' => date('Y-m-d H:i:s'),
-                    'ip_address' => '192.168.1.1'
+                    'ip_address' => '192.168.1.1',
+                    'browser' => 'Chrome',
+                    'device' => 'Desktop',
+                    'formatted_time' => date('h:i A'),
+                    'formatted_date' => date('M d, Y'),
+                    'time_ago' => 'Just now'
                 ]
             ];
         }
 
-        // Prepare data for donut chart (Health Issues, Announcements, Consultations)
+        // Update chartData with actual values
         $chartData = [
-            ['category' => 'Health Issues', 'count' => $analytics['health_issues'], 'color' => '#ef4444'],
-            ['category' => 'Announcements', 'count' => $analytics['announcements'], 'color' => '#3b82f6'],
-            ['category' => 'Consultations', 'count' => $analytics['consultations'], 'color' => '#10b981']
+            ['category' => 'Health Records', 'count' => $analytics['health_issues'], 'color' => '#ef4444', 'icon' => 'fas fa-heartbeat'],
+            ['category' => 'Announcements', 'count' => $analytics['announcements'], 'color' => '#3b82f6', 'icon' => 'fas fa-bullhorn'],
+            ['category' => 'Consultations', 'count' => $analytics['consultations'], 'color' => '#10b981', 'icon' => 'fas fa-file-medical-alt']
         ];
 
     } catch (PDOException $e) {
         $error = 'Error fetching analytics data: ' . $e->getMessage();
+    }
+}
+
+// Helper function to calculate time ago
+function getTimeAgo($datetime) {
+    $time = strtotime($datetime);
+    $now = time();
+    $diff = $now - $time;
+    
+    if ($diff < 60) {
+        return 'Just now';
+    } elseif ($diff < 3600) {
+        $mins = floor($diff / 60);
+        return $mins . ' min' . ($mins > 1 ? 's' : '') . ' ago';
+    } elseif ($diff < 86400) {
+        $hours = floor($diff / 3600);
+        return $hours . ' hour' . ($hours > 1 ? 's' : '') . ' ago';
+    } elseif ($diff < 604800) {
+        $days = floor($diff / 86400);
+        return $days . ' day' . ($days > 1 ? 's' : '') . ' ago';
+    } else {
+        return date('M d, Y', $time);
     }
 }
 ?>
@@ -278,13 +363,141 @@ if ($userData) {
             background: #cbd5e1;
             border-radius: 10px;
         }
-        .activity-log-item {
-            border-left: 3px solid;
-            padding-left: 1rem;
-            margin-bottom: 1rem;
+        
+        /* Activity Log Styles */
+        .activity-log-container {
+            max-height: 300px;
+            overflow-y: auto;
         }
-        .activity-log-item.login { border-color: #10b981; }
-        .activity-log-item.logout { border-color: #ef4444; }
+        
+        .activity-log-item {
+            display: flex;
+            align-items: flex-start;
+            padding: 16px;
+            border-radius: 10px;
+            margin-bottom: 12px;
+            background: #f8fafc;
+            border-left: 4px solid;
+            transition: all 0.2s ease;
+        }
+        
+        .activity-log-item:hover {
+            background: #f1f5f9;
+            transform: translateX(2px);
+        }
+        
+        .activity-log-item.login {
+            border-left-color: #10b981;
+        }
+        
+        .activity-log-item.logout {
+            border-left-color: #ef4444;
+        }
+        
+        .activity-icon {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 40px;
+            height: 40px;
+            border-radius: 10px;
+            margin-right: 16px;
+            flex-shrink: 0;
+        }
+        
+        .activity-icon.login {
+            background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);
+        }
+        
+        .activity-icon.logout {
+            background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%);
+        }
+        
+        .activity-content {
+            flex: 1;
+        }
+        
+        .activity-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 4px;
+        }
+        
+        .activity-title {
+            font-weight: 600;
+            color: #1f2937;
+            font-size: 14px;
+        }
+        
+        .activity-time {
+            font-size: 12px;
+            color: #6b7280;
+            background: #f3f4f6;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-weight: 500;
+        }
+        
+        .activity-details {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            margin-top: 8px;
+        }
+        
+        .activity-detail {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 12px;
+            color: #6b7280;
+        }
+        
+        .activity-detail i {
+            font-size: 11px;
+        }
+        
+        /* Bold Icons */
+        .bold-icon {
+            font-weight: 900 !important;
+        }
+        
+        /* Chart legend items */
+        .chart-legend-item {
+            display: flex;
+            align-items: center;
+            padding: 8px 12px;
+            border-radius: 8px;
+            background: #f9fafb;
+            margin-bottom: 8px;
+            transition: all 0.2s ease;
+        }
+        
+        .chart-legend-item:hover {
+            background: #f3f4f6;
+        }
+        
+        .chart-legend-icon {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
+            margin-right: 12px;
+        }
+        
+        /* Stats card icons */
+        .stats-icon-container {
+            width: 56px;
+            height: 56px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 16px;
+        }
     </style>
 </head>
 <body class="bg-gray-100">
@@ -292,41 +505,41 @@ if ($userData) {
         <!-- Dashboard Header -->
         <div class="flex justify-between items-center mb-8">
             <h1 class="text-2xl font-bold flex items-center">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-blue-600 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                </svg>
+                <div class="stats-icon-container bg-blue-100 mr-3">
+                    <i class="fas fa-chart-pie text-blue-600 text-xl bold-icon"></i>
+                </div>
                 Health Analytics Dashboard
             </h1>
             <!-- Help Button -->
-            <button onclick="openHelpModal()" class="help-icon text-blue-600 p-8 rounded-full hover:text-blue-500 transition">
-                <i class="fa-solid fa-circle-info text-4xl"></i>
+            <button onclick="openHelpModal()" class="help-icon text-blue-600 hover:text-blue-500 transition">
+                <div class="w-14 h-14 bg-blue-100 rounded-full flex items-center justify-center">
+                    <i class="fa-solid fa-circle-question text-2xl bold-icon"></i>
+                </div>
             </button>
         </div>
 
         <?php if ($error): ?>
             <div class="bg-yellow-100 border border-yellow-400 text-yellow-700 px-4 py-3 rounded mb-4 flex items-center">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
-                    <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
-                </svg>
-                Note: <?= htmlspecialchars($error) ?>
+                <div class="w-8 h-8 bg-yellow-200 rounded-full flex items-center justify-center mr-3">
+                    <i class="fas fa-exclamation-circle text-yellow-600 bold-icon"></i>
+                </div>
+                <span>Note: <?= htmlspecialchars($error) ?></span>
             </div>
         <?php endif; ?>
         
         <?php if ($success): ?>
             <div class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-4 flex items-center">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
-                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
-                </svg>
-                <?= htmlspecialchars($success) ?>
+                <div class="w-8 h-8 bg-green-200 rounded-full flex items-center justify-center mr-3">
+                    <i class="fas fa-check-circle text-green-600 bold-icon"></i>
+                </div>
+                <span><?= htmlspecialchars($success) ?></span>
             </div>
         <?php endif; ?>
 
         <!-- Main Tabs - Only Analytics -->
         <div class="flex border-b border-gray-200 mb-6">
             <a href="?tab=analytics" class="<?= $activeTab === 'analytics' ? 'border-b-2 border-blue-500 text-blue-600' : 'text-gray-500 hover:text-gray-700' ?> px-4 py-2 font-medium flex items-center">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                </svg>
+                <i class="fas fa-chart-pie text-lg mr-2 bold-icon"></i>
                 Health Analytics
             </a>
         </div>
@@ -340,8 +553,8 @@ if ($userData) {
                     <!-- Health Issues Card -->
                     <div class="stats-card">
                         <div class="flex items-center">
-                            <div class="w-12 h-12 bg-red-100 rounded-lg flex items-center justify-center mr-4">
-                                <i class="fas fa-heartbeat text-red-600 text-xl"></i>
+                            <div class="stats-icon-container bg-red-100">
+                                <i class="fas fa-heartbeat text-red-600 text-2xl bold-icon"></i>
                             </div>
                             <div>
                                 <h3 class="text-lg font-semibold text-gray-700">Health Records</h3>
@@ -351,7 +564,7 @@ if ($userData) {
                         </div>
                         <div class="mt-4">
                             <a href="profile.php" class="text-sm text-red-600 font-medium hover:text-red-800 flex items-center">
-                                <i class="fas fa-external-link-alt mr-1"></i>
+                                <i class="fas fa-external-link-alt mr-2 bold-icon"></i>
                                 View health records
                             </a>
                         </div>
@@ -360,8 +573,8 @@ if ($userData) {
                     <!-- Announcements Card -->
                     <div class="stats-card">
                         <div class="flex items-center">
-                            <div class="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center mr-4">
-                                <i class="fas fa-bullhorn text-blue-600 text-xl"></i>
+                            <div class="stats-icon-container bg-blue-100">
+                                <i class="fas fa-bullhorn text-blue-600 text-2xl bold-icon"></i>
                             </div>
                             <div>
                                 <h3 class="text-lg font-semibold text-gray-700">Announcements</h3>
@@ -371,12 +584,12 @@ if ($userData) {
                         </div>
                         <div class="mt-4">
                             <div class="flex justify-between text-sm">
-                                <span class="text-green-600 font-medium">
-                                    <i class="fas fa-check-circle mr-1"></i>
+                                <span class="text-green-600 font-medium flex items-center">
+                                    <i class="fas fa-check-circle mr-2 bold-icon"></i>
                                     <?= $announcementStats['accepted'] ?> Accepted
                                 </span>
-                                <span class="text-yellow-600 font-medium">
-                                    <i class="fas fa-clock mr-1"></i>
+                                <span class="text-yellow-600 font-medium flex items-center">
+                                    <i class="fas fa-clock mr-2 bold-icon"></i>
                                     <?= $announcementStats['pending'] ?> Pending
                                 </span>
                             </div>
@@ -386,8 +599,8 @@ if ($userData) {
                     <!-- Consultations Card -->
                     <div class="stats-card">
                         <div class="flex items-center">
-                            <div class="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center mr-4">
-                                <i class="fas fa-file-medical-alt text-green-600 text-xl"></i>
+                            <div class="stats-icon-container bg-green-100">
+                                <i class="fas fa-file-medical-alt text-green-600 text-2xl bold-icon"></i>
                             </div>
                             <div>
                                 <h3 class="text-lg font-semibold text-gray-700">Consultations</h3>
@@ -397,7 +610,7 @@ if ($userData) {
                         </div>
                         <div class="mt-4">
                             <a href="profile.php" class="text-sm text-green-600 font-medium hover:text-green-800 flex items-center">
-                                <i class="fas fa-history mr-1"></i>
+                                <i class="fas fa-history mr-2 bold-icon"></i>
                                 View consultation history
                             </a>
                         </div>
@@ -408,19 +621,25 @@ if ($userData) {
                 <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
                     <!-- Donut Chart -->
                     <div class="chart-container">
-                        <h3 class="text-lg font-semibold text-gray-800 mb-4 flex items-center">
-                            <i class="fas fa-chart-pie text-blue-500 mr-2"></i>
-                            Health Overview Distribution
-                        </h3>
+                        <div class="flex items-center mb-4">
+                            <div class="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center mr-3">
+                                <i class="fas fa-chart-pie text-blue-600 text-lg bold-icon"></i>
+                            </div>
+                            <h3 class="text-lg font-semibold text-gray-800">Health Overview Distribution</h3>
+                        </div>
                         <div class="h-64">
                             <canvas id="overviewChart"></canvas>
                         </div>
-                        <div class="mt-4 grid grid-cols-3 gap-2">
+                        <div class="mt-4">
                             <?php foreach ($chartData as $item): ?>
-                                <div class="flex items-center">
-                                    <div class="w-3 h-3 rounded-full mr-2" style="background-color: <?= $item['color'] ?>"></div>
-                                    <span class="text-sm text-gray-700"><?= $item['category'] ?></span>
-                                    <span class="ml-auto text-sm font-semibold" style="color: <?= $item['color'] ?>"><?= $item['count'] ?></span>
+                                <div class="chart-legend-item">
+                                    <div class="chart-legend-icon" style="background-color: <?= $item['color'] ?>20;">
+                                        <i class="<?= $item['icon'] ?>" style="color: <?= $item['color'] ?>; font-weight: 900;"></i>
+                                    </div>
+                                    <div class="flex-1">
+                                        <span class="text-sm font-medium text-gray-700"><?= $item['category'] ?></span>
+                                    </div>
+                                    <span class="text-lg font-bold" style="color: <?= $item['color'] ?>"><?= $item['count'] ?></span>
                                 </div>
                             <?php endforeach; ?>
                         </div>
@@ -428,100 +647,140 @@ if ($userData) {
 
                     <!-- Activity Log -->
                     <div class="chart-container">
-                        <h3 class="text-lg font-semibold text-gray-800 mb-4 flex items-center">
-                            <i class="fas fa-history text-purple-500 mr-2"></i>
-                            Recent Activity Log
-                        </h3>
-                        <div class="max-h-64 overflow-y-auto custom-scrollbar">
+                        <div class="flex items-center mb-4">
+                            <div class="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center mr-3">
+                                <i class="fas fa-history text-purple-600 text-lg bold-icon"></i>
+                            </div>
+                            <h3 class="text-lg font-semibold text-gray-800">Recent Activity Log</h3>
+                        </div>
+                        
+                        <div class="activity-log-container custom-scrollbar">
                             <?php if (!empty($activityLog)): ?>
-                                <div class="space-y-3">
+                                <div class="space-y-2">
                                     <?php foreach ($activityLog as $activity): ?>
                                         <div class="activity-log-item <?= $activity['action_type'] ?>">
-                                            <div class="flex justify-between items-start">
-                                                <div>
-                                                    <h4 class="font-medium text-gray-800">
-                                                        <?php if ($activity['action_type'] == 'login'): ?>
-                                                            <i class="fas fa-sign-in-alt text-green-500 mr-1"></i>
-                                                            Account Login
-                                                        <?php else: ?>
-                                                            <i class="fas fa-sign-out-alt text-red-500 mr-1"></i>
-                                                            Account Logout
-                                                        <?php endif; ?>
-                                                    </h4>
-                                                    <p class="text-sm text-gray-600 mt-1">
-                                                        <?= date('M d, Y h:i A', strtotime($activity['action_timestamp'])) ?>
-                                                    </p>
-                                                    <?php if (!empty($activity['ip_address'])): ?>
+                                            <div class="activity-icon <?= $activity['action_type'] ?>">
+                                                <?php if ($activity['action_type'] == 'login'): ?>
+                                                    <i class="fas fa-sign-in-alt text-green-600 text-lg bold-icon"></i>
+                                                <?php else: ?>
+                                                    <i class="fas fa-sign-out-alt text-red-600 text-lg bold-icon"></i>
+                                                <?php endif; ?>
+                                            </div>
+                                            
+                                            <div class="activity-content">
+                                                <div class="activity-header">
+                                                    <div>
+                                                        <div class="activity-title">
+                                                            <?php if ($activity['action_type'] == 'login'): ?>
+                                                                <span class="text-green-600">Account Login</span>
+                                                            <?php else: ?>
+                                                                <span class="text-red-600">Account Logout</span>
+                                                            <?php endif; ?>
+                                                        </div>
                                                         <p class="text-xs text-gray-500 mt-1">
-                                                            <i class="fas fa-network-wired mr-1"></i>
-                                                            IP: <?= htmlspecialchars($activity['ip_address']) ?>
+                                                            <?= $activity['formatted_date'] ?>
                                                         </p>
-                                                    <?php endif; ?>
+                                                    </div>
+                                                    <span class="activity-time">
+                                                        <?= $activity['formatted_time'] ?>
+                                                    </span>
                                                 </div>
-                                                <span class="text-xs px-2 py-1 rounded-full 
-                                                    <?= $activity['action_type'] === 'login' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800' ?>">
-                                                    <?= ucfirst($activity['action_type']) ?>
-                                                </span>
+                                                
+                                                <div class="activity-details">
+                                                    <div class="activity-detail">
+                                                        <i class="fas fa-clock text-gray-400 bold-icon"></i>
+                                                        <span><?= $activity['time_ago'] ?></span>
+                                                    </div>
+                                                    <div class="activity-detail">
+                                                        <i class="fas fa-network-wired text-gray-400 bold-icon"></i>
+                                                        <span><?= htmlspecialchars($activity['ip_address'] ?? 'N/A') ?></span>
+                                                    </div>
+                                                    <div class="activity-detail">
+                                                        <?php if ($activity['device'] == 'Mobile'): ?>
+                                                            <i class="fas fa-mobile-alt text-gray-400 bold-icon"></i>
+                                                        <?php else: ?>
+                                                            <i class="fas fa-desktop text-gray-400 bold-icon"></i>
+                                                        <?php endif; ?>
+                                                        <span><?= $activity['browser'] ?> • <?= $activity['device'] ?></span>
+                                                    </div>
+                                                </div>
                                             </div>
                                         </div>
                                     <?php endforeach; ?>
                                 </div>
                             <?php else: ?>
                                 <div class="text-center py-8">
-                                    <i class="fas fa-history text-4xl text-gray-300 mb-4"></i>
+                                    <div class="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                                        <i class="fas fa-history text-2xl text-gray-300 bold-icon"></i>
+                                    </div>
                                     <p class="text-gray-500">No recent activity found</p>
+                                    <p class="text-sm text-gray-400 mt-1">Your login/logout activities will appear here</p>
                                 </div>
                             <?php endif; ?>
+                        </div>
+                        
+                        <div class="mt-4 pt-4 border-t border-gray-200">
+                            <div class="flex justify-between text-sm text-gray-600">
+                                <span class="flex items-center">
+                                    <div class="w-3 h-3 bg-green-500 rounded-full mr-2"></div>
+                                    Login Activities
+                                </span>
+                                <span class="flex items-center">
+                                    <div class="w-3 h-3 bg-red-500 rounded-full mr-2"></div>
+                                    Logout Activities
+                                </span>
+                            </div>
                         </div>
                     </div>
                 </div>
 
                 <!-- Announcement Response Stats -->
                 <div class="chart-container">
-                    <h3 class="text-lg font-semibold text-gray-800 mb-4 flex items-center">
-                        <i class="fas fa-bell text-yellow-500 mr-2"></i>
-                        Announcement Response Statistics
-                    </h3>
+                    <div class="flex items-center mb-4">
+                        <div class="w-10 h-10 bg-yellow-100 rounded-lg flex items-center justify-center mr-3">
+                            <i class="fas fa-bell text-yellow-600 text-lg bold-icon"></i>
+                        </div>
+                        <h3 class="text-lg font-semibold text-gray-800">Announcement Response Statistics</h3>
+                    </div>
+                    
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <div class="bg-green-50 border border-green-200 rounded-lg p-4">
+                        <div class="bg-green-50 border border-green-200 rounded-xl p-5 hover:shadow-md transition-shadow">
                             <div class="flex items-center">
-                                <div class="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mr-4">
-                                    <i class="fas fa-check text-green-600 text-xl"></i>
+                                <div class="w-16 h-16 bg-green-100 rounded-xl flex items-center justify-center mr-4">
+                                    <i class="fas fa-check text-green-600 text-2xl bold-icon"></i>
                                 </div>
                                 <div>
-                                    <p class="text-2xl font-bold text-green-800"><?= $announcementStats['accepted'] ?></p>
-                                    <p class="text-sm text-green-600">Accepted</p>
+                                    <p class="text-3xl font-bold text-green-800"><?= $announcementStats['accepted'] ?></p>
+                                    <p class="text-sm text-green-600 font-medium">Accepted</p>
                                 </div>
                             </div>
                         </div>
                         
-                        <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                        <div class="bg-yellow-50 border border-yellow-200 rounded-xl p-5 hover:shadow-md transition-shadow">
                             <div class="flex items-center">
-                                <div class="w-12 h-12 bg-yellow-100 rounded-full flex items-center justify-center mr-4">
-                                    <i class="fas fa-clock text-yellow-600 text-xl"></i>
+                                <div class="w-16 h-16 bg-yellow-100 rounded-xl flex items-center justify-center mr-4">
+                                    <i class="fas fa-clock text-yellow-600 text-2xl bold-icon"></i>
                                 </div>
                                 <div>
-                                    <p class="text-2xl font-bold text-yellow-800"><?= $announcementStats['pending'] ?></p>
-                                    <p class="text-sm text-yellow-600">Pending Response</p>
+                                    <p class="text-3xl font-bold text-yellow-800"><?= $announcementStats['pending'] ?></p>
+                                    <p class="text-sm text-yellow-600 font-medium">Pending Response</p>
                                 </div>
                             </div>
                         </div>
                         
-                        <div class="bg-gray-100 border border-gray-300 rounded-lg p-4">
+                        <div class="bg-gray-100 border border-gray-300 rounded-xl p-5 hover:shadow-md transition-shadow">
                             <div class="flex items-center">
-                                <div class="w-12 h-12 bg-gray-200 rounded-full flex items-center justify-center mr-4">
-                                    <i class="fas fa-times text-gray-600 text-xl"></i>
+                                <div class="w-16 h-16 bg-gray-200 rounded-xl flex items-center justify-center mr-4">
+                                    <i class="fas fa-times text-gray-600 text-2xl bold-icon"></i>
                                 </div>
                                 <div>
-                                    <p class="text-2xl font-bold text-gray-800"><?= $announcementStats['dismissed'] ?></p>
-                                    <p class="text-sm text-gray-600">Dismissed</p>
+                                    <p class="text-3xl font-bold text-gray-800"><?= $announcementStats['dismissed'] ?></p>
+                                    <p class="text-sm text-gray-600 font-medium">Dismissed</p>
                                 </div>
                             </div>
                         </div>
                     </div>
                 </div>
-
-                
             </div>
         </div>
     </div>
@@ -536,7 +795,7 @@ if ($userData) {
                         <p class="text-blue-100 text-sm">Understanding your health analytics</p>
                     </div>
                     <button onclick="closeHelpModal()" class="text-white hover:text-blue-200 transition-colors">
-                        <i class="fas fa-times text-2xl"></i>
+                        <i class="fas fa-times text-2xl bold-icon"></i>
                     </button>
                 </div>
             </div>
@@ -544,8 +803,8 @@ if ($userData) {
             <div class="px-8 py-6">
                 <div class="space-y-6">
                     <div class="flex items-start">
-                        <div class="flex-shrink-0 w-10 h-10 bg-red-100 rounded-lg flex items-center justify-center mr-4">
-                            <i class="fas fa-heartbeat text-red-600"></i>
+                        <div class="flex-shrink-0 w-12 h-12 bg-red-100 rounded-lg flex items-center justify-center mr-4">
+                            <i class="fas fa-heartbeat text-red-600 text-lg bold-icon"></i>
                         </div>
                         <div>
                             <h4 class="font-semibold text-gray-800 text-lg mb-2">Health Records</h4>
@@ -554,8 +813,8 @@ if ($userData) {
                     </div>
 
                     <div class="flex items-start">
-                        <div class="flex-shrink-0 w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center mr-4">
-                            <i class="fas fa-bullhorn text-blue-600"></i>
+                        <div class="flex-shrink-0 w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center mr-4">
+                            <i class="fas fa-bullhorn text-blue-600 text-lg bold-icon"></i>
                         </div>
                         <div>
                             <h4 class="font-semibold text-gray-800 text-lg mb-2">Announcements</h4>
@@ -564,8 +823,8 @@ if ($userData) {
                     </div>
 
                     <div class="flex items-start">
-                        <div class="flex-shrink-0 w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center mr-4">
-                            <i class="fas fa-file-medical-alt text-green-600"></i>
+                        <div class="flex-shrink-0 w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center mr-4">
+                            <i class="fas fa-file-medical-alt text-green-600 text-lg bold-icon"></i>
                         </div>
                         <div>
                             <h4 class="font-semibold text-gray-800 text-lg mb-2">Consultations</h4>
@@ -574,8 +833,8 @@ if ($userData) {
                     </div>
 
                     <div class="flex items-start">
-                        <div class="flex-shrink-0 w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center mr-4">
-                            <i class="fas fa-history text-purple-600"></i>
+                        <div class="flex-shrink-0 w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center mr-4">
+                            <i class="fas fa-history text-purple-600 text-lg bold-icon"></i>
                         </div>
                         <div>
                             <h4 class="font-semibold text-gray-800 text-lg mb-2">Activity Log</h4>
@@ -587,7 +846,7 @@ if ($userData) {
 
             <div class="px-8 py-6 bg-gray-50 border-t border-gray-200">
                 <button type="button" onclick="closeHelpModal()" class="px-7 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white font-medium rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all shadow-md hover:shadow-lg flex items-center">
-                    <i class="fas fa-check mr-2"></i>
+                    <i class="fas fa-check mr-2 bold-icon"></i>
                     Got it, thanks!
                 </button>
             </div>
@@ -630,15 +889,30 @@ if ($userData) {
                     cutout: '70%'
                 }
             });
+            
+            // Add animation to activity log items
+            const activityItems = document.querySelectorAll('.activity-log-item');
+            activityItems.forEach((item, index) => {
+                item.style.opacity = '0';
+                item.style.transform = 'translateX(-10px)';
+                
+                setTimeout(() => {
+                    item.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
+                    item.style.opacity = '1';
+                    item.style.transform = 'translateX(0)';
+                }, index * 100);
+            });
         });
 
         // Help modal functions
         function openHelpModal() {
             document.getElementById('helpModal').classList.remove('hidden');
+            document.body.style.overflow = 'hidden';
         }
 
         function closeHelpModal() {
             document.getElementById('helpModal').classList.add('hidden');
+            document.body.style.overflow = 'auto';
         }
 
         // Close modal when clicking outside
@@ -648,6 +922,13 @@ if ($userData) {
                 closeHelpModal();
             }
         }
+
+        // Close modal with Escape key
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                closeHelpModal();
+            }
+        });
     </script>
 </body>
 </html>
