@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1
--- Generation Time: Jan 20, 2026 at 12:25 AM
+-- Generation Time: Jan 27, 2026 at 04:01 PM
 -- Server version: 10.4.32-MariaDB
 -- PHP Version: 8.2.12
 
@@ -20,6 +20,21 @@ SET time_zone = "+00:00";
 --
 -- Database: `healthpatient`
 --
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `account_linking_history`
+--
+
+CREATE TABLE `account_linking_history` (
+  `id` int(11) NOT NULL,
+  `resident_id` int(11) NOT NULL,
+  `patient_id` int(11) NOT NULL,
+  `action` varchar(50) NOT NULL,
+  `performed_by` int(11) NOT NULL,
+  `created_at` datetime NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
 
@@ -58,22 +73,6 @@ CREATE TABLE `announcement_targets` (
 -- --------------------------------------------------------
 
 --
--- Table structure for table `appointment_reschedule_log`
---
-
-CREATE TABLE `appointment_reschedule_log` (
-  `id` int(11) NOT NULL,
-  `user_appointment_id` int(11) NOT NULL,
-  `old_appointment_id` int(11) NOT NULL,
-  `new_appointment_id` int(11) NOT NULL,
-  `reschedule_date` datetime NOT NULL,
-  `reason` text DEFAULT NULL,
-  `created_at` timestamp NOT NULL DEFAULT current_timestamp()
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
--- --------------------------------------------------------
-
---
 -- Table structure for table `audit_logs`
 --
 
@@ -97,6 +96,23 @@ CREATE TABLE `audit_logs` (
 
 INSERT INTO `audit_logs` (`id`, `user_id`, `user_type`, `action`, `table_affected`, `record_id`, `old_values`, `new_values`, `ip_address`, `user_agent`, `created_at`) VALUES
 (1, 2, 'staff', 'create patient', 'sitio1_patients', 10, NULL, NULL, '::1', NULL, '2025-05-04 01:40:46');
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `consultation_notes`
+--
+
+CREATE TABLE `consultation_notes` (
+  `id` int(11) NOT NULL,
+  `patient_id` int(11) NOT NULL,
+  `note` text NOT NULL,
+  `consultation_date` date NOT NULL,
+  `next_consultation_date` date DEFAULT NULL,
+  `created_by` int(11) NOT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NULL DEFAULT NULL ON UPDATE current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
 
@@ -125,7 +141,12 @@ CREATE TABLE `deleted_patients` (
 --
 
 INSERT INTO `deleted_patients` (`id`, `original_id`, `full_name`, `date_of_birth`, `age`, `gender`, `address`, `contact`, `last_checkup`, `added_by`, `user_id`, `deleted_at`, `deleted_by`) VALUES
-(86, 175, 'Russel Evan Loquinario', '2000-01-15', 26, 'Male', 'Tisa Cebu City', '09206001470', '2026-01-15', 2, NULL, '2026-01-15 02:02:47', 2);
+(96, 202, 'Russel Evan Loquinario  bbossssss', '1999-05-26', 26, 'Male', 'Labangon Cebu City Philippines', '09816497664', '2026-01-27', 1, 179, '2026-01-27 01:42:14', 1),
+(97, 204, 'Jerecho Latosa', '1999-12-12', 26, 'Male', 'Barangay Luz, Cebu City Philippines free facebook', '09816497664', '2026-01-01', 1, 181, '2026-01-27 01:43:03', 1),
+(98, 203, 'Archiel R. Cabanag', '1999-12-05', 26, 'Male', 'Labangon Cebu City', '09816497664', '2026-01-15', 1, 180, '2026-01-27 01:43:06', 1),
+(99, 201, 'Warren Miguel Miras', '1999-05-12', 23, 'Male', 'Barangay Luz, Cebu City Philippines free facebook', '09816497664', '2026-01-21', 1, 178, '2026-01-27 01:43:08', 1),
+(100, 207, 'Warren Miguel Miras', '2002-05-25', 0, 'Male', 'Barangay Luz, Cebu City Philippines', '09816497664', '2026-01-05', 1, 178, '2026-01-27 14:33:06', 1),
+(101, 208, 'Archiel R. Cabanag', '2002-05-29', 0, 'Male', 'Barangay Luz, Cebu City Philippine', '09816497664', '2026-01-13', 1, 180, '2026-01-27 14:33:09', 1);
 
 -- --------------------------------------------------------
 
@@ -151,16 +172,24 @@ CREATE TABLE `existing_info_patients` (
   `chronic_conditions` text DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
+-- --------------------------------------------------------
+
 --
--- Dumping data for table `existing_info_patients`
+-- Table structure for table `patient_consultation_notes`
 --
 
-INSERT INTO `existing_info_patients` (`id`, `patient_id`, `gender`, `height`, `weight`, `blood_type`, `allergies`, `medical_history`, `current_medications`, `family_history`, `updated_at`, `temperature`, `blood_pressure`, `immunization_record`, `chronic_conditions`) VALUES
-(129, 166, 'Male', 34.00, 34.00, 'AB+', 'sad', 'sad', 'sad', 'sad', '2026-01-08 11:51:56', 45.00, '120/80', 'sad', 'sad'),
-(142, 172, 'Female', 45.00, 45.00, 'B+', 'Wala ra', 'Naa napaakan ug iro', 'Biogesic', 'Wala ra pud kaloy an sa ginoo', '2026-01-19 23:10:41', 45.00, '120/80', 'Wala pa ugma pa siguro', 'Wala ra kaloy an sa ginoo'),
-(146, 174, 'male', 45.00, 45.00, 'A+', 'sad', 'sad', 'sad', 'sad', '2026-01-19 23:15:43', 45.00, '120/80', 'sad', 'sad'),
-(148, 176, 'Male', 45.00, 45.00, 'A+', 'sad', 'sad', 'sad', 'asd', '2026-01-19 23:11:53', 45.00, '120/80', 'sad', 'sad'),
-(149, 177, 'Male', 34.00, 34.00, 'A+', 'sad', 'sad', 'sad', 'boss JERECHO LATOSA', '2026-01-19 23:12:41', 45.00, '120/80', 'sad', 'sad');
+CREATE TABLE `patient_consultation_notes` (
+  `id` int(11) NOT NULL,
+  `patient_id` int(11) NOT NULL,
+  `staff_id` int(11) NOT NULL,
+  `consultation_date` datetime DEFAULT current_timestamp(),
+  `note_type` enum('General','Follow-up','Medication','Diagnosis','Referral','Other') DEFAULT 'General',
+  `notes` text NOT NULL,
+  `next_checkup_date` date DEFAULT NULL,
+  `status` enum('Active','Resolved','Pending','Cancelled') DEFAULT 'Active',
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
 
@@ -173,19 +202,34 @@ CREATE TABLE `patient_visits` (
   `patient_id` int(11) NOT NULL,
   `staff_id` int(11) NOT NULL,
   `visit_date` datetime NOT NULL,
-  `visit_type` enum('checkup','consultation','emergency','followup') NOT NULL,
+  `visit_type` varchar(100) NOT NULL,
+  `symptoms` text DEFAULT NULL,
+  `vital_signs` text DEFAULT NULL,
   `diagnosis` text DEFAULT NULL,
   `treatment` text DEFAULT NULL,
   `prescription` text DEFAULT NULL,
+  `referral_info` text DEFAULT NULL,
   `notes` text DEFAULT NULL,
   `next_visit_date` date DEFAULT NULL,
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
-  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
-  `symptoms` text DEFAULT NULL,
-  `vital_signs` text DEFAULT NULL,
-  `visit_purpose` varchar(100) DEFAULT NULL,
-  `referral_info` text DEFAULT NULL
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `sitio1_account_linking_history`
+--
+
+CREATE TABLE `sitio1_account_linking_history` (
+  `id` int(11) NOT NULL,
+  `user_id` int(11) NOT NULL,
+  `patient_record_id` int(11) DEFAULT NULL,
+  `linked_by` int(11) NOT NULL,
+  `action` varchar(50) NOT NULL COMMENT 'link, unlink, create_and_link',
+  `details` text DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- --------------------------------------------------------
 
@@ -212,11 +256,11 @@ CREATE TABLE `sitio1_announcements` (
 --
 
 INSERT INTO `sitio1_announcements` (`id`, `staff_id`, `title`, `message`, `priority`, `expiry_date`, `post_date`, `updated_at`, `status`, `audience_type`, `image_path`) VALUES
-(50, 2, 'Cebu Eastern College Inc. Sinulog Festival', 'Everyone must come for the celebration of fiesta senor santo nino here in oval at cebu city', 'medium', '2026-01-10', '2026-01-09 00:05:23', NULL, 'archived', 'landing_page', NULL),
-(51, 2, 'Cebu Eastern College Defense', 'Hello', 'normal', '2026-01-14', '2026-01-14 07:17:57', NULL, 'active', 'landing_page', NULL),
-(52, 2, 'Cebu Eastern College Defense', 'Hello', 'medium', '2026-01-14', '2026-01-14 07:18:41', NULL, 'active', 'landing_page', NULL),
-(53, 2, 'Cebu Eastern College Defense', 'Hello', 'high', '2026-01-14', '2026-01-14 07:19:06', NULL, 'active', 'landing_page', NULL),
-(54, 2, 'MOBA', 'welcome to mobile legends 4 mins till enemy reaches the battle field smash them', 'high', '2027-05-19', '2026-01-15 06:23:06', NULL, 'active', 'landing_page', NULL);
+(55, 1, 'Hello', 'asdasfdasdasdasd', 'normal', '2026-01-24', '2026-01-23 11:36:08', NULL, 'archived', 'specific', '/community-health-tracker/uploads/announcements/69735d28f204f.jpg'),
+(56, 1, 'Hello', 'asdasfdasdasdasd', 'normal', '2026-01-24', '2026-01-23 11:42:00', NULL, 'archived', 'specific', '/community-health-tracker/uploads/announcements/69735e88db18e.jpg'),
+(57, 1, 'Hello', 'asdasfdasdasdasd', 'normal', '2026-01-24', '2026-01-23 12:33:32', NULL, 'archived', 'specific', '/community-health-tracker/uploads/announcements/69736a9c05915.jpg'),
+(58, 1, 'Hello sir Russel Evan Loki', 'Hello sir', 'normal', '2026-01-26', '2026-01-25 09:31:03', NULL, 'active', 'specific', NULL),
+(59, 1, 'asdasdasds', 'adasdasd', 'medium', NULL, '2026-01-27 13:24:07', NULL, 'active', 'specific', NULL);
 
 -- --------------------------------------------------------
 
@@ -231,28 +275,8 @@ CREATE TABLE `sitio1_appointments` (
   `start_time` time NOT NULL,
   `end_time` time NOT NULL,
   `max_slots` int(11) DEFAULT 1,
-  `slots_taken` int(11) NOT NULL DEFAULT 0,
-  `slots_available` int(11) NOT NULL DEFAULT 0,
-  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
-  `health_condition` varchar(255) DEFAULT NULL,
-  `service_id` int(11) DEFAULT NULL,
-  `service_type` enum('General Checkup','Vaccination','Dental','Blood Test') DEFAULT 'General Checkup',
-  `is_auto_created` tinyint(1) DEFAULT 0
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
---
--- Dumping data for table `sitio1_appointments`
---
-
-INSERT INTO `sitio1_appointments` (`id`, `staff_id`, `date`, `start_time`, `end_time`, `max_slots`, `slots_taken`, `slots_available`, `created_at`, `health_condition`, `service_id`, `service_type`, `is_auto_created`) VALUES
-(172, 2, '2026-01-09', '08:00:00', '09:00:00', 5, 0, 0, '2026-01-08 05:08:14', NULL, NULL, 'General Checkup', 0),
-(173, 2, '2026-01-12', '08:00:00', '09:00:00', 5, 0, 0, '2026-01-09 02:32:42', NULL, NULL, 'General Checkup', 0),
-(174, 2, '2026-01-12', '09:00:00', '10:00:00', 5, 0, 0, '2026-01-10 12:27:26', NULL, NULL, 'General Checkup', 0),
-(175, 2, '2026-01-12', '11:00:00', '12:00:00', 5, 0, 0, '2026-01-12 02:07:30', NULL, NULL, 'General Checkup', 0),
-(176, 2, '2026-01-15', '08:00:00', '09:00:00', 5, 0, 0, '2026-01-14 07:02:18', NULL, NULL, 'General Checkup', 0),
-(177, 2, '2026-01-16', '08:00:00', '09:00:00', 5, 0, 0, '2026-01-14 07:03:41', NULL, NULL, 'General Checkup', 0),
-(178, 2, '2026-01-15', '09:00:00', '10:00:00', 5, 0, 0, '2026-01-14 07:03:56', NULL, NULL, 'General Checkup', 0),
-(179, 2, '2026-01-20', '08:00:00', '09:00:00', 5, 0, 0, '2026-01-19 11:37:51', NULL, NULL, 'General Checkup', 0);
 
 -- --------------------------------------------------------
 
@@ -281,6 +305,10 @@ CREATE TABLE `sitio1_consultations` (
 CREATE TABLE `sitio1_patients` (
   `id` int(11) NOT NULL,
   `user_id` int(11) DEFAULT NULL,
+  `phic_no` varchar(50) DEFAULT NULL,
+  `bhw_assigned` varchar(100) DEFAULT NULL,
+  `family_no` varchar(50) DEFAULT NULL,
+  `fourps_member` enum('Yes','No') DEFAULT 'No',
   `full_name` varchar(100) NOT NULL,
   `date_of_birth` date DEFAULT NULL,
   `age` int(11) DEFAULT NULL,
@@ -300,19 +328,9 @@ CREATE TABLE `sitio1_patients` (
   `civil_status` varchar(20) DEFAULT NULL,
   `occupation` varchar(100) DEFAULT NULL,
   `consent_given` tinyint(1) DEFAULT 0,
-  `consent_date` datetime DEFAULT NULL
+  `consent_date` datetime DEFAULT NULL,
+  `patient_record_uid` varchar(50) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
---
--- Dumping data for table `sitio1_patients`
---
-
-INSERT INTO `sitio1_patients` (`id`, `user_id`, `full_name`, `date_of_birth`, `age`, `address`, `sitio`, `disease`, `contact`, `last_checkup`, `medical_history`, `added_by`, `created_at`, `deleted_at`, `restored_at`, `gender`, `updated_at`, `consultation_type`, `civil_status`, `occupation`, `consent_given`, `consent_date`) VALUES
-(166, NULL, 'Archiel R. Cabanag', '1999-01-08', 27, 'Labangon Cebu City', 'Luz Proper', NULL, '09206001470', '2026-01-08', NULL, 2, '2026-01-08 05:28:14', NULL, NULL, 'Male', '2026-01-08 05:28:14', 'onsite', 'Single', 'Student', 1, '2026-01-08 13:28:14'),
-(172, NULL, 'Creshiel Manloloyo', '2026-01-15', 26, 'Labangon Cebu City', 'Lower Luz', NULL, '09816497664', '2026-01-15', NULL, 2, '2026-01-14 23:38:51', NULL, '2026-01-14 23:38:51', 'Female', '2026-01-19 23:08:01', 'onsite', 'Single', 'Student', 0, NULL),
-(174, 162, 'Jaycar Otida', NULL, 21, 'Barangay Luz, Cebu City', NULL, NULL, '09206001470', '2026-01-15', NULL, 2, '2026-01-15 00:44:56', NULL, NULL, 'Male', '2026-01-15 00:44:56', 'onsite', NULL, NULL, 0, NULL),
-(176, NULL, 'Rica Mae Java', '2000-01-16', 29, 'Gawi, Oslob, Cebu', 'Lower Luz', NULL, '09816497664', '2026-01-16', NULL, 2, '2026-01-15 22:48:33', NULL, NULL, 'Male', '2026-01-19 23:11:53', 'onsite', 'Single', 'Student', 1, '2026-01-16 06:48:33'),
-(177, NULL, 'Jerecho Latosa', '2000-01-20', 26, 'Duljo Fatima, Cebu City', '', NULL, '09206001470', '2026-01-20', NULL, 2, '2026-01-19 21:41:56', NULL, NULL, 'Male', '2026-01-19 23:12:41', 'onsite', 'Single', 'Student', 1, '2026-01-20 05:41:56');
 
 -- --------------------------------------------------------
 
@@ -341,33 +359,7 @@ CREATE TABLE `sitio1_staff` (
 
 INSERT INTO `sitio1_staff` (`id`, `username`, `password`, `full_name`, `position`, `created_by`, `created_at`, `status`, `is_active`, `work_days`, `specialization`, `license_number`) VALUES
 (1, 'Lance', '$2y$10$61keyKT9UVY4PQIN1jD2TOLwqv2i5C0cpE82vyi4lBeajqmJg8EbS', 'Lance Christine Gallardo', 'Nurse', 1, '2025-05-01 21:25:31', 'active', 1, '1111100', NULL, '1'),
-(2, 'Archiel', '$2y$10$6JkB04nXJ2E14yUo5einmusdXo1hIJdLSLgrim2w51DMh8f7T7en.', 'Archiel  Rosel Cabanag', 'Health Worker', 1, '2025-05-01 23:05:06', 'active', 1, '1111100', NULL, '1'),
-(3, 'Jerecho', '$2y$10$rpOSWoHbDr1xq2lKxoms/.QlKfNSuC.rkDl343C3WYVgdVuiZ2qvK', 'Jerecho Latosa', 'Health Worker', 1, '2025-05-04 00:53:14', 'active', 1, '1111100', NULL, '1'),
-(5, 'Arnold', '$2y$10$QQecwmqob/kZq9IDqaHrAODAE8ju9aRDUh0tmV0NS/SoktAwet46i', 'Arnold R. Cabanag', 'Doctor', 1, '2025-08-19 11:29:12', 'inactive', 0, '1111100', NULL, '1');
-
--- --------------------------------------------------------
-
---
--- Table structure for table `sitio1_staff_schedule`
---
-
-CREATE TABLE `sitio1_staff_schedule` (
-  `id` int(11) NOT NULL,
-  `staff_id` int(11) NOT NULL,
-  `date` date NOT NULL,
-  `is_working` tinyint(1) DEFAULT 0,
-  `start_time` time DEFAULT '08:00:00',
-  `end_time` time DEFAULT '17:00:00',
-  `deleted_at` datetime DEFAULT NULL,
-  `status` varchar(20) DEFAULT 'active'
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
---
--- Dumping data for table `sitio1_staff_schedule`
---
-
-INSERT INTO `sitio1_staff_schedule` (`id`, `staff_id`, `date`, `is_working`, `start_time`, `end_time`, `deleted_at`, `status`) VALUES
-(28, 2, '2025-08-21', 0, '08:00:00', '17:00:00', NULL, 'active');
+(2, 'Archiel', '$2y$10$6JkB04nXJ2E14yUo5einmusdXo1hIJdLSLgrim2w51DMh8f7T7en.', 'Archiel  Rosel Cabanag', 'Health Worker', 1, '2025-05-01 23:05:06', 'active', 1, '1111100', NULL, '1');
 
 -- --------------------------------------------------------
 
@@ -393,6 +385,7 @@ CREATE TABLE `sitio1_users` (
   `approved_by` int(11) DEFAULT NULL,
   `unique_number` varchar(20) DEFAULT NULL,
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `last_login` timestamp NULL DEFAULT NULL,
   `status` enum('pending','approved','declined') DEFAULT 'pending',
   `role` varchar(20) DEFAULT 'patient',
   `specialization` varchar(255) DEFAULT NULL,
@@ -404,19 +397,22 @@ CREATE TABLE `sitio1_users` (
   `verification_notes` text DEFAULT NULL,
   `verification_consent` tinyint(1) DEFAULT 0,
   `id_verified` tinyint(1) DEFAULT 0,
-  `verified_at` timestamp NULL DEFAULT NULL
+  `verified_at` timestamp NULL DEFAULT NULL,
+  `account_linked` tinyint(1) DEFAULT 0,
+  `patient_record_id` int(11) DEFAULT NULL,
+  `patient_record_uid` varchar(50) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
 -- Dumping data for table `sitio1_users`
 --
 
-INSERT INTO `sitio1_users` (`id`, `username`, `password`, `email`, `full_name`, `gender`, `age`, `date_of_birth`, `address`, `sitio`, `contact`, `civil_status`, `occupation`, `approved`, `approved_by`, `unique_number`, `created_at`, `status`, `role`, `specialization`, `license_number`, `updated_at`, `verification_method`, `id_image_path`, `profile_image`, `verification_notes`, `verification_consent`, `id_verified`, `verified_at`) VALUES
-(158, 'Warren', '$2y$10$5le3PRRAJGZ9lJffOMWvwulrPIqhJLUG0gAjy8IyPUUrmscWKqDhK', 'warrenmiguel789@gmail.com', 'Warren Miguel Miras', 'male', 25, '2001-01-06', 'Barangay Luz, Cebu City', 'Panganiban', '09206001470', 'married', 'Test', 1, NULL, 'CHT931628', '2026-01-08 04:39:10', 'approved', 'patient', NULL, NULL, '2026-01-08 12:07:44', 'id_upload', 'uploads/id_documents/id_Warren_1767847150.jpg', NULL, 'Hello Po sir', 1, 0, NULL),
-(160, 'Russel', '$2y$10$xvmVSl1fpBeYvHBkwGJ2Le/Qse58qDDbnELmriPZvcbzP8Xrqr9BO', 'russel@gmail.com', 'Russel Loquinario', 'male', 31, '1995-01-10', 'Barangay Luz, Cebu City', 'Proper Luz', '09312312421', 'single', 'Test', 0, NULL, NULL, '2026-01-10 12:34:19', 'pending', 'patient', NULL, NULL, NULL, 'id_upload', 'uploads/id_documents/id_Russel_1768048459.pdf', NULL, 'Hello', 1, 0, NULL),
-(161, 'Jerecho', '$2y$10$kDHnv2QWqBn6jNYemkxU7ew26thxLOW.utuMUWrVr0IPfhx1ZAWr2', 'jerecho@gmail.com', 'Jerecho Latosa', 'male', 26, '2000-01-10', 'Barangay Luz, Cebu City', 'Panganiban', '09206001470', 'married', 'Test', 1, NULL, 'CHT429900', '2026-01-10 12:39:29', 'approved', 'patient', NULL, NULL, '2026-01-11 13:43:42', 'id_upload', 'uploads/id_documents/id_Jerecho_1768048769.jpg', NULL, 'Boss', 1, 0, NULL),
-(162, 'Jaycar', '$2y$10$yq5EHa6NdURONXjJ8HB/yuDTFJNlNWgtRhOb2lLcMv6Hqyzm.d8n6', 'jaycarotida@gmail.com', 'Jaycar Otida', 'male', 21, '2004-04-03', 'Barangay Luz, Cebu City', 'Panganiban', '09206001470', 'single', 'Test', 1, NULL, 'CHT895106', '2026-01-14 06:59:42', 'approved', 'patient', NULL, NULL, '2026-01-14 07:01:26', 'id_upload', 'uploads/id_documents/id_Jaycar_1768373982.jpg', NULL, 'Hello', 1, 0, NULL),
-(163, 'Archiel', '$2y$10$7Pc5AbU2AG2o.0grI0ii6.WwF9xAHCsCdQOBPfE4RatsCIS4Lpq22', 'cabanagarchielrosel@gmail.com', 'Archiel  Rosel Cabanag', 'male', 23, '2002-05-26', 'Barangay Luz, Cebu City', 'Panganiban', '09816497664', 'separated', 'Test', 1, NULL, 'CHT049042', '2026-01-14 07:26:42', 'approved', 'patient', NULL, NULL, '2026-01-14 07:28:03', 'id_upload', 'uploads/id_documents/id_Archiel_1768375602.jpg', NULL, 'asdad', 1, 0, NULL);
+INSERT INTO `sitio1_users` (`id`, `username`, `password`, `email`, `full_name`, `gender`, `age`, `date_of_birth`, `address`, `sitio`, `contact`, `civil_status`, `occupation`, `approved`, `approved_by`, `unique_number`, `created_at`, `last_login`, `status`, `role`, `specialization`, `license_number`, `updated_at`, `verification_method`, `id_image_path`, `profile_image`, `verification_notes`, `verification_consent`, `id_verified`, `verified_at`, `account_linked`, `patient_record_id`, `patient_record_uid`) VALUES
+(178, 'Warren', '$2y$10$KHf5CYe6kk6jW2RZkY10DuEZ.EBZVOPUcW0kT743i8sb/TAc3aQmm', 'warrenmiras@gmail.com', 'Warren Miguel Miras', 'male', 0, '2026-01-19', NULL, 'Panganiban', '09206001470', NULL, NULL, 1, NULL, 'RESPAN202601444', '2026-01-25 08:42:08', NULL, 'approved', 'patient', NULL, NULL, '2026-01-27 13:27:29', 'manual_verification', NULL, NULL, NULL, 0, 1, '2026-01-25 08:42:08', 0, NULL, 'PAT-20260127-WAR-9681'),
+(179, 'Russel', '$2y$10$jDlPRD/2QG.XLFTpG16qZOOsFfSfB2hwV40unXoVrIz8b.2dJSSQy', 'russel@gmail.com', 'Russel Evan Loquinario', 'male', 0, '2026-01-07', NULL, 'Panganiban', '09206001470', NULL, NULL, 1, NULL, 'RESPAN202601713', '2026-01-25 09:27:16', NULL, 'approved', 'patient', NULL, NULL, '2026-01-26 03:00:55', 'manual_verification', NULL, NULL, NULL, 0, 1, '2026-01-25 09:27:16', 0, NULL, 'PAT-20260126-RUS-6055'),
+(180, 'Archiel', '$2y$10$4NS8QMOW4t74kq1S7XgSlOsCSMBHNu06h6.A78bkh1fVVYOk4YmIO', 'cabanagarchielrosel@gmail.com', 'Archiel R. Cabanag', 'male', 0, '2026-01-13', NULL, 'Carbon', '09816497664', NULL, NULL, 1, NULL, 'RESCAR202601055', '2026-01-26 05:56:51', NULL, 'approved', 'patient', NULL, NULL, '2026-01-27 14:19:19', 'manual_verification', NULL, NULL, NULL, 0, 1, '2026-01-26 05:56:51', 0, NULL, 'PAT-20260127-ARC-5015'),
+(181, 'Jerecho', '$2y$10$khi1U3O3HGc10VYhgNpBnOiKNKKtrCU/zlX8GYH.tLH6eoY3WgZLa', 'jerecholatosa@gmail.com', 'Jerecho Latosa', 'male', 0, '2026-01-20', NULL, 'Luz Heights', '09816497664', NULL, NULL, 1, NULL, 'RESLUZ202601021', '2026-01-26 10:37:28', NULL, 'approved', 'patient', NULL, NULL, '2026-01-26 11:41:29', 'manual_verification', NULL, NULL, NULL, 0, 1, '2026-01-26 10:37:28', 0, NULL, 'PAT-20260126-JER-7155'),
+(183, 'Jaycar', '$2y$10$r4yMdBPW9zWE01pGpukpWe6.qlH3nVE0o76oL4/gAVB.sU97F/Lqm', 'jaycarotida@gmail.com', 'Jaycar Otida', 'male', 0, '2026-01-21', NULL, 'Panganiban', '09206001470', NULL, NULL, 1, NULL, 'RESPAN202601406', '2026-01-26 22:16:48', NULL, 'approved', 'patient', NULL, NULL, '2026-01-26 22:55:51', 'manual_verification', NULL, NULL, NULL, 0, 1, '2026-01-26 22:16:48', 0, NULL, 'PAT-20260127-JAY-8404');
 
 -- --------------------------------------------------------
 
@@ -460,6 +456,13 @@ CREATE TABLE `user_announcements` (
   `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
+--
+-- Dumping data for table `user_announcements`
+--
+
+INSERT INTO `user_announcements` (`id`, `user_id`, `announcement_id`, `status`, `response_date`, `updated_at`) VALUES
+(63, 179, 58, 'accepted', '2026-01-25 09:31:16', '2026-01-25 09:31:16');
+
 -- --------------------------------------------------------
 
 --
@@ -469,70 +472,24 @@ CREATE TABLE `user_announcements` (
 CREATE TABLE `user_appointments` (
   `id` int(11) NOT NULL,
   `user_id` int(11) NOT NULL,
-  `service_id` int(11) DEFAULT NULL,
   `appointment_id` int(11) NOT NULL,
-  `status` enum('pending','approved','completed','cancelled','rejected','rescheduled','missed') NOT NULL DEFAULT 'pending',
-  `priority_number` varchar(50) DEFAULT NULL,
-  `invoice_number` varchar(50) DEFAULT NULL,
-  `rescheduled_from` int(11) DEFAULT NULL,
+  `status` enum('pending','approved','completed','rejected') DEFAULT 'pending',
   `notes` text DEFAULT NULL,
-  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
-  `rejection_reason` text DEFAULT NULL,
-  `cancel_reason` text DEFAULT NULL,
-  `cancelled_at` datetime DEFAULT NULL,
-  `last_processed` datetime DEFAULT NULL,
-  `reschedule_count` int(11) DEFAULT 0,
-  `previous_appointment_id` int(11) DEFAULT NULL,
-  `service_type` enum('General Checkup','Vaccination','Dental','Blood Test') DEFAULT 'General Checkup',
-  `processed_at` timestamp NULL DEFAULT NULL COMMENT 'Timestamp when appointment was processed (approved/rejected/completed)',
-  `invoice_generated_at` datetime DEFAULT NULL,
-  `completed_at` datetime DEFAULT NULL,
-  `health_concerns` text DEFAULT NULL,
-  `consent` datetime DEFAULT NULL COMMENT 'Timestamp when consent was given',
-  `rescheduled_at` datetime DEFAULT NULL,
-  `rescheduled_count` int(11) DEFAULT 0,
-  `cancelled_by_user` tinyint(1) DEFAULT 0,
-  `appointment_ticket` longtext DEFAULT NULL,
-  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
---
--- Dumping data for table `user_appointments`
---
-
-INSERT INTO `user_appointments` (`id`, `user_id`, `service_id`, `appointment_id`, `status`, `priority_number`, `invoice_number`, `rescheduled_from`, `notes`, `created_at`, `rejection_reason`, `cancel_reason`, `cancelled_at`, `last_processed`, `reschedule_count`, `previous_appointment_id`, `service_type`, `processed_at`, `invoice_generated_at`, `completed_at`, `health_concerns`, `consent`, `rescheduled_at`, `rescheduled_count`, `cancelled_by_user`, `appointment_ticket`, `updated_at`) VALUES
-(268, 159, 174, 174, 'completed', '01', 'INV-20260112-0268', NULL, 'sad', '2026-01-12 01:44:22', NULL, NULL, NULL, NULL, 0, NULL, 'General Checkup', '2026-01-12 01:44:38', '2026-01-12 09:44:38', '2026-01-12 09:45:58', 'Obesity', '0000-00-00 00:00:00', NULL, 0, 0, NULL, '2026-01-12 01:45:58'),
-(269, 159, 175, 175, 'cancelled', '1', NULL, NULL, 'sad', '2026-01-12 02:07:51', NULL, 'jgfhfgderwrtgereartfdsf', '2026-01-12 10:10:12', NULL, 0, NULL, 'General Checkup', NULL, NULL, NULL, 'Other', '0000-00-00 00:00:00', NULL, 0, 1, NULL, '2026-01-12 02:10:12'),
-(270, 159, 175, 175, 'missed', '1', NULL, NULL, 'bvcbvc', '2026-01-12 02:10:43', NULL, NULL, NULL, NULL, 0, NULL, 'General Checkup', NULL, NULL, NULL, 'Depression', '0000-00-00 00:00:00', NULL, 0, 0, NULL, '2026-01-12 12:00:37'),
-(271, 162, 176, 176, 'cancelled', '1', NULL, NULL, 'Sakit ako likod', '2026-01-14 07:05:30', NULL, 'asdasdgasdasdasdasdas', '2026-01-14 15:05:57', NULL, 0, NULL, 'General Checkup', NULL, NULL, NULL, 'Obesity, Other', '0000-00-00 00:00:00', NULL, 0, 1, NULL, '2026-01-14 07:05:57'),
-(272, 162, 178, 178, 'rejected', '1', NULL, NULL, 'sad', '2026-01-14 07:06:29', 'scam appointment', NULL, NULL, NULL, 0, NULL, 'General Checkup', NULL, NULL, NULL, 'Other', '0000-00-00 00:00:00', NULL, 0, 0, NULL, '2026-01-14 07:07:19'),
-(273, 162, 176, 176, 'completed', '01', 'INV-20260114-0273', NULL, 'sad', '2026-01-14 07:07:38', NULL, NULL, NULL, NULL, 0, NULL, 'General Checkup', '2026-01-14 07:07:55', '2026-01-14 15:07:55', '2026-01-14 15:15:48', 'Depression', '0000-00-00 00:00:00', NULL, 0, 0, NULL, '2026-01-14 07:15:48'),
-(274, 162, 178, 178, 'completed', '01', 'INV-20260114-0274', NULL, 'sad', '2026-01-14 12:47:18', NULL, NULL, NULL, NULL, 0, NULL, 'General Checkup', '2026-01-14 12:47:27', '2026-01-14 20:47:27', '2026-01-14 23:11:10', 'Other', '0000-00-00 00:00:00', NULL, 0, 0, NULL, '2026-01-14 15:11:10'),
-(275, 162, 177, 177, 'cancelled', '1', NULL, NULL, 'sad', '2026-01-14 15:12:56', NULL, 'asddsadasd', '2026-01-14 23:13:27', NULL, 0, NULL, 'General Checkup', NULL, NULL, NULL, 'Depression', '0000-00-00 00:00:00', NULL, 0, 1, NULL, '2026-01-14 15:13:27'),
-(276, 162, 177, 177, 'missed', '01', 'INV-20260115-0276', NULL, 'sad', '2026-01-14 23:27:14', NULL, NULL, NULL, NULL, 0, NULL, 'General Checkup', '2026-01-14 23:27:26', '2026-01-15 07:27:26', NULL, 'Other', '0000-00-00 00:00:00', NULL, 0, 0, NULL, '2026-01-16 03:33:20'),
-(277, 163, 177, 177, 'missed', '02', 'INV-20260115-0277', NULL, 'hb hbvh', '2026-01-15 06:19:32', NULL, NULL, NULL, NULL, 0, NULL, 'General Checkup', '2026-01-15 06:19:51', '2026-01-15 14:19:51', NULL, 'Other', '0000-00-00 00:00:00', NULL, 0, 0, NULL, '2026-01-16 03:33:20');
-
--- --------------------------------------------------------
-
---
--- Table structure for table `user_notifications`
---
-
-CREATE TABLE `user_notifications` (
-  `id` int(11) NOT NULL,
-  `user_id` int(11) NOT NULL,
-  `title` varchar(255) NOT NULL,
-  `message` text NOT NULL,
-  `type` varchar(50) NOT NULL,
-  `related_id` int(11) DEFAULT NULL,
-  `is_read` tinyint(1) DEFAULT 0,
-  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
-  `read_at` datetime DEFAULT NULL
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
 -- Indexes for dumped tables
 --
+
+--
+-- Indexes for table `account_linking_history`
+--
+ALTER TABLE `account_linking_history`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `idx_resident` (`resident_id`),
+  ADD KEY `idx_patient` (`patient_id`),
+  ADD KEY `idx_created` (`created_at`);
 
 --
 -- Indexes for table `admin`
@@ -550,19 +507,18 @@ ALTER TABLE `announcement_targets`
   ADD KEY `user_id` (`user_id`);
 
 --
--- Indexes for table `appointment_reschedule_log`
---
-ALTER TABLE `appointment_reschedule_log`
-  ADD PRIMARY KEY (`id`),
-  ADD KEY `user_appointment_id` (`user_appointment_id`),
-  ADD KEY `old_appointment_id` (`old_appointment_id`),
-  ADD KEY `new_appointment_id` (`new_appointment_id`);
-
---
 -- Indexes for table `audit_logs`
 --
 ALTER TABLE `audit_logs`
   ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `consultation_notes`
+--
+ALTER TABLE `consultation_notes`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `idx_patient_id` (`patient_id`),
+  ADD KEY `idx_created_by` (`created_by`);
 
 --
 -- Indexes for table `deleted_patients`
@@ -578,13 +534,28 @@ ALTER TABLE `existing_info_patients`
   ADD KEY `patient_id` (`patient_id`);
 
 --
+-- Indexes for table `patient_consultation_notes`
+--
+ALTER TABLE `patient_consultation_notes`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `idx_patient_consultation_notes` (`patient_id`,`consultation_date`);
+
+--
 -- Indexes for table `patient_visits`
 --
 ALTER TABLE `patient_visits`
   ADD PRIMARY KEY (`id`),
   ADD KEY `patient_id` (`patient_id`),
-  ADD KEY `staff_id` (`staff_id`),
-  ADD KEY `visit_date` (`visit_date`);
+  ADD KEY `staff_id` (`staff_id`);
+
+--
+-- Indexes for table `sitio1_account_linking_history`
+--
+ALTER TABLE `sitio1_account_linking_history`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `idx_user_id` (`user_id`),
+  ADD KEY `idx_linked_by` (`linked_by`),
+  ADD KEY `patient_record_id` (`patient_record_id`);
 
 --
 -- Indexes for table `sitio1_announcements`
@@ -605,8 +576,8 @@ ALTER TABLE `sitio1_appointments`
 --
 ALTER TABLE `sitio1_consultations`
   ADD PRIMARY KEY (`id`),
-  ADD KEY `responded_by` (`responded_by`),
-  ADD KEY `sitio1_consultations_ibfk_1` (`user_id`);
+  ADD KEY `user_id` (`user_id`),
+  ADD KEY `responded_by` (`responded_by`);
 
 --
 -- Indexes for table `sitio1_patients`
@@ -614,7 +585,8 @@ ALTER TABLE `sitio1_consultations`
 ALTER TABLE `sitio1_patients`
   ADD PRIMARY KEY (`id`),
   ADD KEY `user_id` (`user_id`),
-  ADD KEY `added_by` (`added_by`);
+  ADD KEY `added_by` (`added_by`),
+  ADD KEY `idx_patients_user_id` (`user_id`);
 
 --
 -- Indexes for table `sitio1_staff`
@@ -625,20 +597,14 @@ ALTER TABLE `sitio1_staff`
   ADD KEY `created_by` (`created_by`);
 
 --
--- Indexes for table `sitio1_staff_schedule`
---
-ALTER TABLE `sitio1_staff_schedule`
-  ADD PRIMARY KEY (`id`),
-  ADD UNIQUE KEY `unique_staff_date` (`staff_id`,`date`);
-
---
 -- Indexes for table `sitio1_users`
 --
 ALTER TABLE `sitio1_users`
   ADD PRIMARY KEY (`id`),
   ADD UNIQUE KEY `username` (`username`),
   ADD UNIQUE KEY `email_UNIQUE` (`email`),
-  ADD KEY `approved_by` (`approved_by`);
+  ADD KEY `approved_by` (`approved_by`),
+  ADD KEY `idx_users_patient_id` (`patient_record_id`);
 
 --
 -- Indexes for table `staff_documents`
@@ -659,18 +625,19 @@ ALTER TABLE `user_announcements`
 -- Indexes for table `user_appointments`
 --
 ALTER TABLE `user_appointments`
-  ADD PRIMARY KEY (`id`);
-
---
--- Indexes for table `user_notifications`
---
-ALTER TABLE `user_notifications`
   ADD PRIMARY KEY (`id`),
-  ADD KEY `user_id` (`user_id`);
+  ADD KEY `user_id` (`user_id`),
+  ADD KEY `appointment_id` (`appointment_id`);
 
 --
 -- AUTO_INCREMENT for dumped tables
 --
+
+--
+-- AUTO_INCREMENT for table `account_linking_history`
+--
+ALTER TABLE `account_linking_history`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
 
 --
 -- AUTO_INCREMENT for table `admin`
@@ -682,13 +649,7 @@ ALTER TABLE `admin`
 -- AUTO_INCREMENT for table `announcement_targets`
 --
 ALTER TABLE `announcement_targets`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=16;
-
---
--- AUTO_INCREMENT for table `appointment_reschedule_log`
---
-ALTER TABLE `appointment_reschedule_log`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=21;
 
 --
 -- AUTO_INCREMENT for table `audit_logs`
@@ -697,46 +658,64 @@ ALTER TABLE `audit_logs`
   MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
 
 --
+-- AUTO_INCREMENT for table `consultation_notes`
+--
+ALTER TABLE `consultation_notes`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=23;
+
+--
 -- AUTO_INCREMENT for table `deleted_patients`
 --
 ALTER TABLE `deleted_patients`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=87;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=102;
 
 --
 -- AUTO_INCREMENT for table `existing_info_patients`
 --
 ALTER TABLE `existing_info_patients`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=150;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=171;
+
+--
+-- AUTO_INCREMENT for table `patient_consultation_notes`
+--
+ALTER TABLE `patient_consultation_notes`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
 
 --
 -- AUTO_INCREMENT for table `patient_visits`
 --
 ALTER TABLE `patient_visits`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=28;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `sitio1_account_linking_history`
+--
+ALTER TABLE `sitio1_account_linking_history`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
 
 --
 -- AUTO_INCREMENT for table `sitio1_announcements`
 --
 ALTER TABLE `sitio1_announcements`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=55;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=60;
 
 --
 -- AUTO_INCREMENT for table `sitio1_appointments`
 --
 ALTER TABLE `sitio1_appointments`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=180;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
 
 --
 -- AUTO_INCREMENT for table `sitio1_consultations`
 --
 ALTER TABLE `sitio1_consultations`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=17;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
 
 --
 -- AUTO_INCREMENT for table `sitio1_patients`
 --
 ALTER TABLE `sitio1_patients`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=178;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=209;
 
 --
 -- AUTO_INCREMENT for table `sitio1_staff`
@@ -745,16 +724,10 @@ ALTER TABLE `sitio1_staff`
   MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=7;
 
 --
--- AUTO_INCREMENT for table `sitio1_staff_schedule`
---
-ALTER TABLE `sitio1_staff_schedule`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=29;
-
---
 -- AUTO_INCREMENT for table `sitio1_users`
 --
 ALTER TABLE `sitio1_users`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=164;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=184;
 
 --
 -- AUTO_INCREMENT for table `staff_documents`
@@ -766,18 +739,12 @@ ALTER TABLE `staff_documents`
 -- AUTO_INCREMENT for table `user_announcements`
 --
 ALTER TABLE `user_announcements`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=63;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=64;
 
 --
 -- AUTO_INCREMENT for table `user_appointments`
 --
 ALTER TABLE `user_appointments`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=278;
-
---
--- AUTO_INCREMENT for table `user_notifications`
---
-ALTER TABLE `user_notifications`
   MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
 
 --
@@ -792,18 +759,32 @@ ALTER TABLE `announcement_targets`
   ADD CONSTRAINT `announcement_targets_ibfk_2` FOREIGN KEY (`user_id`) REFERENCES `sitio1_users` (`id`) ON DELETE CASCADE;
 
 --
--- Constraints for table `appointment_reschedule_log`
+-- Constraints for table `consultation_notes`
 --
-ALTER TABLE `appointment_reschedule_log`
-  ADD CONSTRAINT `appointment_reschedule_log_ibfk_1` FOREIGN KEY (`user_appointment_id`) REFERENCES `user_appointments` (`id`),
-  ADD CONSTRAINT `appointment_reschedule_log_ibfk_2` FOREIGN KEY (`old_appointment_id`) REFERENCES `sitio1_appointments` (`id`),
-  ADD CONSTRAINT `appointment_reschedule_log_ibfk_3` FOREIGN KEY (`new_appointment_id`) REFERENCES `sitio1_appointments` (`id`);
+ALTER TABLE `consultation_notes`
+  ADD CONSTRAINT `consultation_notes_ibfk_1` FOREIGN KEY (`patient_id`) REFERENCES `sitio1_patients` (`id`) ON DELETE CASCADE,
+  ADD CONSTRAINT `fk_consultation_notes_created_by_staff` FOREIGN KEY (`created_by`) REFERENCES `sitio1_staff` (`id`) ON DELETE CASCADE;
 
 --
 -- Constraints for table `existing_info_patients`
 --
 ALTER TABLE `existing_info_patients`
   ADD CONSTRAINT `existing_info_patients_ibfk_1` FOREIGN KEY (`patient_id`) REFERENCES `sitio1_patients` (`id`) ON DELETE CASCADE;
+
+--
+-- Constraints for table `patient_visits`
+--
+ALTER TABLE `patient_visits`
+  ADD CONSTRAINT `patient_visits_ibfk_1` FOREIGN KEY (`patient_id`) REFERENCES `sitio1_patients` (`id`),
+  ADD CONSTRAINT `patient_visits_ibfk_2` FOREIGN KEY (`staff_id`) REFERENCES `sitio1_staff` (`id`);
+
+--
+-- Constraints for table `sitio1_account_linking_history`
+--
+ALTER TABLE `sitio1_account_linking_history`
+  ADD CONSTRAINT `sitio1_account_linking_history_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `sitio1_users` (`id`) ON DELETE CASCADE,
+  ADD CONSTRAINT `sitio1_account_linking_history_ibfk_2` FOREIGN KEY (`patient_record_id`) REFERENCES `sitio1_patients` (`id`) ON DELETE SET NULL,
+  ADD CONSTRAINT `sitio1_account_linking_history_ibfk_3` FOREIGN KEY (`linked_by`) REFERENCES `sitio1_staff` (`id`) ON DELETE CASCADE;
 
 --
 -- Constraints for table `sitio1_announcements`
@@ -821,12 +802,14 @@ ALTER TABLE `sitio1_appointments`
 -- Constraints for table `sitio1_consultations`
 --
 ALTER TABLE `sitio1_consultations`
+  ADD CONSTRAINT `sitio1_consultations_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `sitio1_users` (`id`),
   ADD CONSTRAINT `sitio1_consultations_ibfk_2` FOREIGN KEY (`responded_by`) REFERENCES `sitio1_staff` (`id`);
 
 --
 -- Constraints for table `sitio1_patients`
 --
 ALTER TABLE `sitio1_patients`
+  ADD CONSTRAINT `fk_patient_user` FOREIGN KEY (`user_id`) REFERENCES `sitio1_users` (`id`) ON DELETE SET NULL,
   ADD CONSTRAINT `sitio1_patients_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `sitio1_users` (`id`),
   ADD CONSTRAINT `sitio1_patients_ibfk_2` FOREIGN KEY (`added_by`) REFERENCES `sitio1_staff` (`id`);
 
@@ -835,12 +818,6 @@ ALTER TABLE `sitio1_patients`
 --
 ALTER TABLE `sitio1_staff`
   ADD CONSTRAINT `sitio1_staff_ibfk_1` FOREIGN KEY (`created_by`) REFERENCES `admin` (`id`);
-
---
--- Constraints for table `sitio1_staff_schedule`
---
-ALTER TABLE `sitio1_staff_schedule`
-  ADD CONSTRAINT `sitio1_staff_schedule_ibfk_1` FOREIGN KEY (`staff_id`) REFERENCES `sitio1_staff` (`id`);
 
 --
 -- Constraints for table `sitio1_users`
@@ -861,10 +838,11 @@ ALTER TABLE `user_announcements`
   ADD CONSTRAINT `user_announcements_ibfk_2` FOREIGN KEY (`announcement_id`) REFERENCES `sitio1_announcements` (`id`) ON DELETE CASCADE;
 
 --
--- Constraints for table `user_notifications`
+-- Constraints for table `user_appointments`
 --
-ALTER TABLE `user_notifications`
-  ADD CONSTRAINT `user_notifications_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `sitio1_users` (`id`);
+ALTER TABLE `user_appointments`
+  ADD CONSTRAINT `user_appointments_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `sitio1_users` (`id`),
+  ADD CONSTRAINT `user_appointments_ibfk_2` FOREIGN KEY (`appointment_id`) REFERENCES `sitio1_appointments` (`id`);
 COMMIT;
 
 /*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
