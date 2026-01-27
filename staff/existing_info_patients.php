@@ -121,7 +121,7 @@ try {
 
 // Handle form submission for editing health info
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_health_info'])) {
-    $required = ['patient_id', 'height', 'weight', 'blood_type'];
+    $required = ['patient_id', 'full_name', 'date_of_birth', 'gender', 'address', 'contact', 'height', 'weight', 'blood_type'];
     $missing = [];
 
     foreach ($required as $field) {
@@ -130,26 +130,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_health_info'])) 
         }
     }
 
-    // Get patient gender from database if not provided
-    $gender = $_POST['gender'];
-    if (empty($gender)) {
-        try {
-            $stmt = $pdo->prepare("SELECT gender FROM sitio1_patients WHERE id = ?");
-            $stmt->execute([$_POST['patient_id']]);
-            $patient = $stmt->fetch(PDO::FETCH_ASSOC);
-            if ($patient && !empty($patient['gender'])) {
-                $gender = $patient['gender'];
-            }
-        } catch (PDOException $e) {
-            $missing[] = 'gender';
-        }
-    }
-
     if (!empty($missing)) {
         $error = "Please fill in all required fields: " . implode(', ', str_replace('_', ' ', $missing));
     } else {
         try {
             $patient_id = $_POST['patient_id'];
+            
+            // Personal Information
+            $full_name = $_POST['full_name'];
+            $date_of_birth = $_POST['date_of_birth'];
+            $age = $_POST['age'];
+            $gender = $_POST['gender'];
+            $address = $_POST['address'];
+            $sitio = $_POST['sitio'];
+            $civil_status = $_POST['civil_status'];
+            $occupation = !empty($_POST['occupation']) ? $_POST['occupation'] : null;
+            $contact = $_POST['contact'];
+            $last_checkup = !empty($_POST['last_checkup']) ? $_POST['last_checkup'] : null;
+            
+            // Additional Fields
+            $phic_no = !empty($_POST['phic_no']) ? $_POST['phic_no'] : null;
+            $bhw_assigned = !empty($_POST['bhw_assigned']) ? $_POST['bhw_assigned'] : null;
+            $family_no = !empty($_POST['family_no']) ? $_POST['family_no'] : null;
+            $fourps_member = !empty($_POST['fourps_member']) ? $_POST['fourps_member'] : 'No';
+            
+            // Medical Information
             $height = $_POST['height'];
             $weight = $_POST['weight'];
             $blood_type = $_POST['blood_type'];
@@ -161,17 +166,43 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_health_info'])) 
             $family_history = !empty($_POST['family_history']) ? $_POST['family_history'] : null;
             $immunization_record = !empty($_POST['immunization_record']) ? $_POST['immunization_record'] : null;
             $chronic_conditions = !empty($_POST['chronic_conditions']) ? $_POST['chronic_conditions'] : null;
-            $phic_no = !empty($_POST['phic_no']) ? $_POST['phic_no'] : null;
-            $bhw_assigned = !empty($_POST['bhw_assigned']) ? $_POST['bhw_assigned'] : null;
-            $family_no = !empty($_POST['family_no']) ? $_POST['family_no'] : null;
-            $fourps_member = !empty($_POST['fourps_member']) ? $_POST['fourps_member'] : 'No';
 
-            // Check if record exists
+            // Start transaction
+            $pdo->beginTransaction();
+
+            // Update main patient table with ALL personal information
+            $updatePatientQuery = "UPDATE sitio1_patients SET 
+                full_name = ?, 
+                date_of_birth = ?, 
+                age = ?, 
+                gender = ?, 
+                address = ?, 
+                sitio = ?, 
+                civil_status = ?, 
+                occupation = ?, 
+                contact = ?, 
+                last_checkup = ?,
+                phic_no = ?, 
+                bhw_assigned = ?, 
+                family_no = ?, 
+                fourps_member = ?,
+                updated_at = NOW()
+                WHERE id = ? AND added_by = ?";
+            
+            $stmt = $pdo->prepare($updatePatientQuery);
+            $stmt->execute([
+                $full_name, $date_of_birth, $age, $gender, $address, 
+                $sitio, $civil_status, $occupation, $contact, $last_checkup,
+                $phic_no, $bhw_assigned, $family_no, $fourps_member,
+                $patient_id, $_SESSION['user']['id']
+            ]);
+
+            // Check if medical record exists
             $stmt = $pdo->prepare("SELECT id FROM existing_info_patients WHERE patient_id = ?");
             $stmt->execute([$patient_id]);
 
             if ($stmt->fetch()) {
-                // Update existing record
+                // Update existing medical record
                 $stmt = $pdo->prepare("UPDATE existing_info_patients SET 
                     gender = ?, height = ?, weight = ?, blood_type = ?, temperature = ?, 
                     blood_pressure = ?, allergies = ?, medical_history = ?, 
@@ -184,9 +215,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_health_info'])) 
                     $current_medications, $family_history, $immunization_record,
                     $chronic_conditions, $patient_id
                 ]);
-                $message = "Patient health information updated successfully!";
             } else {
-                // Insert new record
+                // Insert new medical record
                 $stmt = $pdo->prepare("INSERT INTO existing_info_patients 
                     (patient_id, gender, height, weight, blood_type, temperature,
                     blood_pressure, allergies, medical_history, current_medications, 
@@ -197,16 +227,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_health_info'])) 
                     $blood_pressure, $allergies, $medical_history, $current_medications,
                     $family_history, $immunization_record, $chronic_conditions
                 ]);
-                $message = "Patient health information saved successfully!";
             }
 
-            // Update the patient table with new fields
-            $updatePatientQuery = "UPDATE sitio1_patients SET gender = ?, phic_no = ?, bhw_assigned = ?, family_no = ?, fourps_member = ? WHERE id = ?";
-            $stmt = $pdo->prepare($updatePatientQuery);
-            $stmt->execute([$gender, $phic_no, $bhw_assigned, $family_no, $fourps_member, $patient_id]);
+            $pdo->commit();
+            $message = "Patient information saved successfully!";
 
         } catch (PDOException $e) {
-            $error = "Error saving patient health information: " . $e->getMessage();
+            $pdo->rollBack();
+            $error = "Error saving patient information: " . $e->getMessage();
         }
     }
 }
@@ -647,121 +675,274 @@ if (isset($_GET['export']) && $_GET['export'] == 'excel') {
         echo '</head>';
         echo '<body>';
         
-        // Header section
-        echo '<table border="1">';
-        echo '<tr class="header-row">';
-        echo '<td colspan="12" style="text-align: center; padding: 15px;">BARANGAY LUZ HEALTH CENTER - PATIENT RECORDS EXPORT</td>';
-        echo '</tr>';
-        echo '<tr class="section-header">';
-        echo '<td colspan="12">Export Information</td>';
-        echo '</tr>';
-        echo '<tr class="info-row">';
-        echo '<td colspan="3">Generated On:</td>';
-        echo '<td colspan="3">' . date('F j, Y h:i A') . '</td>';
-        echo '<td colspan="3">Generated By:</td>';
-        echo '<td colspan="3">' . $_SESSION['user']['full_name'] . '</td>';
-        echo '</tr>';
-        echo '<tr class="info-row">';
-        echo '<td colspan="3">Total Records:</td>';
-        echo '<td colspan="3">' . count($patients) . '</td>';
-        echo '<td colspan="3">Export Type:</td>';
-        echo '<td colspan="3">' . ucfirst($patientType) . ' Patients</td>';
-        echo '</tr>';
-        echo '<tr><td colspan="12">&nbsp;</td></tr>';
+        // Add these styles for better readability
+echo '<style>
+    body {
+        font-family: "Segoe UI", Arial, sans-serif;
+        margin: 20px;
+        background-color: #ffffff;
+    }
+    
+    table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-bottom: 20px;
+    }
+    
+    .header-row {
+        background-color: #1a5f7a;
+        color: white;
+        font-size: 16pt;
+        font-weight: bold;
+    }
+    
+    .section-header {
+        background-color: #2d8c9e;
+        color: white;
+        font-weight: bold;
+        font-size: 12pt;
+    }
+    
+    .info-row {
+        background-color: #f8f9fa;
+        font-size: 10pt;
+    }
+    
+    th {
+        background-color: #e3f2fd;
+        color: #1a237e;
+        padding: 10px;
+        text-align: left;
+        border: 1px solid #ddd;
+        font-weight: bold;
+        font-size: 10pt;
+    }
+    
+    td {
+        padding: 8px;
+        border: 1px solid #ddd;
+        font-size: 10pt;
+        vertical-align: top;
+    }
+    
+    .summary-row {
+        background-color: #e8f5e9;
+        font-weight: bold;
+        color: #1b5e20;
+    }
+    
+    .date-cell {
+        white-space: nowrap;
+    }
+    
+    .highlight {
+        background-color: #fff3e0;
+    }
+    
+    .footer {
+        font-size: 8pt;
+        color: #666;
+        text-align: center;
+        margin-top: 30px;
+        padding-top: 10px;
+        border-top: 1px solid #ccc;
+    }
+    
+    .medical-section {
+        page-break-before: always;
+        margin-top: 30px;
+    }
+    
+    .center-header {
+        text-align: center;
+        font-size: 18pt;
+        color: #1a5f7a;
+        margin-bottom: 20px;
+    }
+    
+    .label {
+        font-weight: bold;
+        color: #333;
+    }
+</style>';
+
+echo '<html><body>';
+
+// Main header
+echo '<div class="center-header">BARANGAY LUZ HEALTH CENTER<br>';
+echo '<span style="font-size: 14pt;">Patient Records Export</span></div>';
+
+// Export Information Table
+echo '<table>';
+echo '<tr class="section-header">';
+echo '<td colspan="12">EXPORT INFORMATION</td>';
+echo '</tr>';
+
+echo '<tr class="info-row">';
+echo '<td colspan="3" class="label">Generated On:</td>';
+echo '<td colspan="3">' . date('F j, Y h:i A') . '</td>';
+echo '<td colspan="3" class="label">Generated By:</td>';
+echo '<td colspan="3">' . htmlspecialchars($_SESSION['user']['full_name'] ?? 'System') . '</td>';
+echo '</tr>';
+
+echo '<tr class="info-row">';
+echo '<td colspan="3" class="label">Total Records:</td>';
+echo '<td colspan="3">' . number_format(count($patients)) . '</td>';
+echo '<td colspan="3" class="label">Export Type:</td>';
+echo '<td colspan="3">' . ucfirst($patientType) . ' Patients</td>';
+echo '</tr>';
+echo '</table>';
+
+// Patient Records Table
+echo '<table>';
+echo '<tr class="section-header">';
+echo '<td colspan="12">PATIENT BASIC INFORMATION</td>';
+echo '</tr>';
+
+// Column headers
+echo '<tr>';
+echo '<th style="width: 3%;">No.</th>';
+echo '<th style="width: 8%;">Patient ID</th>';
+echo '<th style="width: 15%;">Full Name</th>';
+echo '<th style="width: 8%;">Date of Birth</th>';
+echo '<th style="width: 5%;">Age</th>';
+echo '<th style="width: 7%;">Gender</th>';
+echo '<th style="width: 10%;">Contact</th>';
+echo '<th style="width: 15%;">Address</th>';
+echo '<th style="width: 10%;">Sitio</th>';
+echo '<th style="width: 8%;">Blood Type</th>';
+echo '<th style="width: 10%;">Last Checkup</th>';
+echo '<th style="width: 11%;">Patient Type</th>';
+echo '</tr>';
+
+// Data rows
+$counter = 1;
+foreach ($patients as $patient) {
+    // Alternate row coloring for better readability
+    $rowClass = ($counter % 2 == 0) ? 'style="background-color: #f9f9f9;"' : '';
+    
+    echo '<tr ' . $rowClass . '>';
+    echo '<td>' . $counter++ . '</td>';
+    echo '<td style="font-family: Consolas, monospace;">' . ($patient['id'] ?? 'N/A') . '</td>';
+    echo '<td><strong>' . htmlspecialchars($patient['full_name'] ?? '') . '</strong></td>';
+    echo '<td class="date-cell">' . (!empty($patient['date_of_birth']) ? date('M d, Y', strtotime($patient['date_of_birth'])) : '') . '</td>';
+    echo '<td style="text-align: center;">' . ($patient['age'] ?? '') . '</td>';
+    echo '<td style="text-align: center;">' . htmlspecialchars($patient['gender'] ?? '') . '</td>';
+    echo '<td>' . (!empty($patient['contact']) ? htmlspecialchars($patient['contact']) : 'N/A') . '</td>';
+    echo '<td>' . (!empty($patient['address']) ? htmlspecialchars($patient['address']) : 'N/A') . '</td>';
+    echo '<td>' . (!empty($patient['sitio']) ? htmlspecialchars($patient['sitio']) : 'N/A') . '</td>';
+    
+    // Highlight blood type with color coding
+    $bloodType = htmlspecialchars($patient['blood_type'] ?? 'N/A');
+    $bloodTypeClass = ($bloodType != 'N/A') ? 'style="font-weight: bold; color: #d32f2f; text-align: center;"' : 'style="text-align: center;"';
+    echo '<td ' . $bloodTypeClass . '>' . $bloodType . '</td>';
+    
+    echo '<td class="date-cell">' . (!empty($patient['last_checkup']) ? date('M d, Y', strtotime($patient['last_checkup'])) : 'N/A') . '</td>';
+    echo '<td style="text-align: center;">' . (!empty($patient['patient_type']) ? htmlspecialchars($patient['patient_type']) : 'Regular') . '</td>';
+    echo '</tr>';
+}
+
+// Summary row
+echo '<tr class="summary-row">';
+echo '<td colspan="12" style="text-align: center; padding: 15px;">';
+echo 'TOTAL PATIENTS: <strong>' . number_format(count($patients)) . '</strong>';
+echo '</td>';
+echo '</tr>';
+echo '</table>';
+
+// Medical Information Table
+echo '<div class="medical-section">';
+echo '<table>';
+echo '<tr class="section-header">';
+echo '<td colspan="8">DETAILED MEDICAL INFORMATION</td>';
+echo '</tr>';
+
+echo '<tr>';
+echo '<th style="width: 20%;">Patient Name</th>';
+echo '<th style="width: 10%; text-align: center;">Height (cm)</th>';
+echo '<th style="width: 10%; text-align: center;">Weight (kg)</th>';
+echo '<th style="width: 10%; text-align: center;">BMI</th>';
+echo '<th style="width: 15%; text-align: center;">Blood Pressure</th>';
+echo '<th style="width: 10%; text-align: center;">Temperature</th>';
+echo '<th style="width: 15%;">Allergies</th>';
+echo '<th style="width: 20%;">Chronic Conditions</th>';
+echo '</tr>';
+
+foreach ($patients as $patient) {
+    // Calculate BMI with proper formatting
+    $height = $patient['height'] ?? 0;
+    $weight = $patient['weight'] ?? 0;
+    
+    if ($height > 0 && $weight > 0) {
+        $bmiValue = $weight / (($height/100) * ($height/100));
+        $bmi = number_format($bmiValue, 1);
         
-        // Column headers
-        echo '<tr>';
-        echo '<th>No.</th>';
-        echo '<th>Patient ID</th>';
-        echo '<th>Full Name</th>';
-        echo '<th>Date of Birth</th>';
-        echo '<th>Age</th>';
-        echo '<th>Gender</th>';
-        echo '<th>Contact</th>';
-        echo '<th>Address</th>';
-        echo '<th>Sitio</th>';
-        echo '<th>Blood Type</th>';
-        echo '<th>Last Checkup</th>';
-        echo '<th>Patient Type</th>';
-        echo '</tr>';
-        
-        // Data rows
-        $counter = 1;
-        foreach ($patients as $patient) {
-            echo '<tr>';
-            echo '<td>' . $counter++ . '</td>';
-            echo '<td>' . ($patient['id'] ?? '') . '</td>';
-            echo '<td>' . htmlspecialchars($patient['full_name'] ?? '') . '</td>';
-            echo '<td class="date-cell">' . (!empty($patient['date_of_birth']) ? $patient['date_of_birth'] : '') . '</td>';
-            echo '<td>' . ($patient['age'] ?? '') . '</td>';
-            echo '<td>' . htmlspecialchars($patient['gender'] ?? '') . '</td>';
-            echo '<td>' . htmlspecialchars($patient['contact'] ?? '') . '</td>';
-            echo '<td>' . htmlspecialchars($patient['address'] ?? '') . '</td>';
-            echo '<td>' . htmlspecialchars($patient['sitio'] ?? '') . '</td>';
-            echo '<td style="font-weight: bold; color: #e74c3c;">' . htmlspecialchars($patient['blood_type'] ?? 'N/A') . '</td>';
-            echo '<td class="date-cell">' . (!empty($patient['last_checkup']) ? $patient['last_checkup'] : '') . '</td>';
-            echo '<td>' . ($patient['patient_type'] ?? 'Regular') . '</td>';
-            echo '</tr>';
+        // Color code BMI based on WHO standards
+        if ($bmiValue < 18.5) {
+            $bmiStyle = 'style="color: #2196f3; font-weight: bold;"';
+        } elseif ($bmiValue >= 18.5 && $bmiValue < 25) {
+            $bmiStyle = 'style="color: #4caf50; font-weight: bold;"';
+        } elseif ($bmiValue >= 25 && $bmiValue < 30) {
+            $bmiStyle = 'style="color: #ff9800; font-weight: bold;"';
+        } else {
+            $bmiStyle = 'style="color: #f44336; font-weight: bold;"';
         }
-        
-        // Summary row
-        echo '<tr class="summary-row">';
-        echo '<td colspan="6">Total Patients:</td>';
-        echo '<td colspan="6">' . count($patients) . '</td>';
-        echo '</tr>';
-        
-        echo '</table>';
-        
-        // Additional detailed information sheet
-        echo '<br><br><br>';
-        echo '<table border="1">';
-        echo '<tr class="header-row">';
-        echo '<td colspan="8" style="text-align: center; padding: 15px;">DETAILED MEDICAL INFORMATION</td>';
-        echo '</tr>';
-        echo '<tr class="section-header">';
-        echo '<td>Patient Name</td>';
-        echo '<td>Height (cm)</td>';
-        echo '<td>Weight (kg)</td>';
-        echo '<td>BMI</td>';
-        echo '<td>Blood Pressure</td>';
-        echo '<td>Temperature</td>';
-        echo '<td>Allergies</td>';
-        echo '<td>Chronic Conditions</td>';
-        echo '</tr>';
-        
-        foreach ($patients as $patient) {
-            $height = $patient['height'] ?? 0;
-            $weight = $patient['weight'] ?? 0;
-            $bmi = ($height > 0 && $weight > 0) ? number_format($weight / (($height/100) * ($height/100)), 2) : 'N/A';
-            
-            echo '<tr>';
-            echo '<td>' . htmlspecialchars($patient['full_name'] ?? '') . '</td>';
-            echo '<td>' . ($height ?: 'N/A') . '</td>';
-            echo '<td>' . ($weight ?: 'N/A') . '</td>';
-            echo '<td>' . $bmi . '</td>';
-            echo '<td>' . htmlspecialchars($patient['blood_pressure'] ?? 'N/A') . '</td>';
-            echo '<td>' . ($patient['temperature'] ? $patient['temperature'] . '°C' : 'N/A') . '</td>';
-            echo '<td>' . htmlspecialchars(substr($patient['allergies'] ?? 'None', 0, 50)) . '</td>';
-            echo '<td>' . htmlspecialchars(substr($patient['chronic_conditions'] ?? 'None', 0, 50)) . '</td>';
-            echo '</tr>';
+    } else {
+        $bmi = 'N/A';
+        $bmiStyle = '';
+    }
+    
+    // Alternate row coloring
+    static $medCounter = 0;
+    $rowClass = (++$medCounter % 2 == 0) ? 'style="background-color: #f9f9f9;"' : '';
+    
+    echo '<tr ' . $rowClass . '>';
+    echo '<td><strong>' . htmlspecialchars($patient['full_name'] ?? '') . '</strong></td>';
+    echo '<td style="text-align: center;">' . ($height ? number_format($height, 1) : 'N/A') . '</td>';
+    echo '<td style="text-align: center;">' . ($weight ? number_format($weight, 1) : 'N/A') . '</td>';
+    echo '<td style="text-align: center;" ' . $bmiStyle . '>' . $bmi . '</td>';
+    
+    // Highlight abnormal blood pressure
+    $bp = htmlspecialchars($patient['blood_pressure'] ?? 'N/A');
+    if ($bp != 'N/A' && preg_match('/(\d+)\s*\/\s*(\d+)/', $bp, $matches)) {
+        $systolic = intval($matches[1]);
+        $diastolic = intval($matches[2]);
+        if ($systolic > 140 || $diastolic > 90) {
+            $bpStyle = 'style="color: #f44336; font-weight: bold;"';
+        } else {
+            $bpStyle = 'style="color: #4caf50;"';
         }
-        
-        echo '</table>';
-        
-        // Footer
-        echo '<br><br>';
-        echo '<table border="0">';
-        echo '<tr>';
-        echo '<td colspan="4" style="font-size: 9pt; color: #666; padding-top: 20px; border-top: 1px solid #ddd;">';
-        echo '<strong>CONFIDENTIALITY NOTICE:</strong> This document contains confidential patient health information. ';
-        echo 'Unauthorized disclosure, copying, or distribution is prohibited.<br>';
-        echo '© ' . date('Y') . ' Barangay Luz Health Center. All rights reserved.';
-        echo '</td>';
-        echo '</tr>';
-        echo '</table>';
-        
-        echo '</body></html>';
-        exit();
+    } else {
+        $bpStyle = '';
+    }
+    
+    echo '<td style="text-align: center;" ' . $bpStyle . '>' . $bp . '</td>';
+    echo '<td style="text-align: center;">' . (!empty($patient['temperature']) ? number_format($patient['temperature'], 1) . '°C' : 'N/A') . '</td>';
+    
+    // Truncate long text but show full text on hover
+    $allergies = !empty($patient['allergies']) ? htmlspecialchars($patient['allergies']) : 'None';
+    $allergiesDisplay = (strlen($allergies) > 30) ? substr($allergies, 0, 30) . '...' : $allergies;
+    
+    $conditions = !empty($patient['chronic_conditions']) ? htmlspecialchars($patient['chronic_conditions']) : 'None';
+    $conditionsDisplay = (strlen($conditions) > 30) ? substr($conditions, 0, 30) . '...' : $conditions;
+    
+    echo '<td title="' . htmlspecialchars($allergies) . '">' . $allergiesDisplay . '</td>';
+    echo '<td title="' . htmlspecialchars($conditions) . '">' . $conditionsDisplay . '</td>';
+    echo '</tr>';
+}
+echo '</table>';
+echo '</div>';
+
+// Footer
+echo '<div class="footer">';
+echo '<strong>CONFIDENTIALITY NOTICE:</strong> This document contains protected health information (PHI).<br>';
+echo 'Unauthorized access, disclosure, or distribution is prohibited under R.A. 10173 (Data Privacy Act).<br>';
+echo 'Report Date: ' . date('F j, Y') . ' | Total Records: ' . number_format(count($patients)) . ' | Generated by: ' . htmlspecialchars($_SESSION['user']['full_name'] ?? 'System') . '<br>';
+echo '© ' . date('Y') . ' Barangay Luz Health Center. For official use only.';
+echo '</div>';
+
+echo '</body></html>';
+exit();
 
     } catch (Exception $e) {
         $error = "Error exporting to Excel: " . $e->getMessage();
@@ -1170,18 +1351,23 @@ if (!empty($searchTerm)) {
             </div>
         <?php endif; ?>
 
-        <!-- Tabs Navigation -->
+        <!-- Main Container - Single Tab Only -->
         <div class="main-container rounded-lg shadow-sm mb-8">
-            <div class="flex border-b border-gray-200">
-                <button class="tab-btn py-4 px-6 font-medium text-gray-600 hover:text-primary border-b-2 border-transparent hover:border-primary transition active" data-tab="patients-tab">
-                    <i class="fas fa-list mr-2"></i>Patient Records
-                </button>
-                <button class="tab-btn py-4 px-6 font-medium text-gray-600 hover:text-primary border-b-2 border-transparent hover:border-primary transition" data-tab="add-tab">
-                    <i class="fas fa-plus-circle mr-2"></i>Add New Patient
-                </button>
+            <!-- Single Tab with Add Patient Button on the right -->
+            <div class="flex border-b border-gray-200 justify-between items-center">
+                <div class="flex">
+                    <button class="tab-btn py-4 px-6 font-medium text-gray-600 hover:text-primary border-b-2 border-transparent hover:border-primary transition active" data-tab="patients-tab">
+                        <i class="fas fa-list mr-2"></i>Patient Records
+                    </button>
+                </div>
+                <div class="pr-6">
+                    <button onclick="openAddPatientModal()" class="btn-add-patient inline-flex items-center">
+                        <i class="fas fa-plus-circle mr-2"></i>Add New Patient
+                    </button>
+                </div>
             </div>
 
-            <!-- Patients Tab -->
+            <!-- Patients Tab (Only Tab Now) -->
             <div id="patients-tab" class="tab-content p-6 active">
                 <div class="flex justify-between items-center mb-6">
                     <h2 class="text-xl font-semibold text-secondary">Patient Records</h2>
@@ -1451,7 +1637,7 @@ if (!empty($searchTerm)) {
                                 <h3 class="text-lg font-medium text-gray-900">No patients found</h3>
                                 <p class="mt-1 text-sm text-gray-500">Get started by adding a new patient.</p>
                                 <div class="mt-6">
-                                    <button data-tab="add-tab" class="tab-trigger btn-primary inline-flex items-center">
+                                    <button onclick="openAddPatientModal()" class="btn-add-patient inline-flex items-center">
                                         <i class="fas fa-plus-circle mr-2"></i>Add Patient
                                     </button>
                                 </div>
@@ -1634,87 +1820,68 @@ if (!empty($searchTerm)) {
                     </div>
                 <?php endif; ?>
             </div>
-
-            <!-- Add Patient Tab -->
-            <div id="add-tab" class="tab-content p-6">
-                <div class="text-center py-12">
-                    <div class="max-w-md mx-auto">
-                        <div class="section-bg p-8 mb-8">
-                            <div class="w-20 h-20 bg-white flex items-center justify-center mx-auto mb-6">
-                                <i class="fa-solid fa-fill text-8xl text-gray-300"></i>
-                            </div>
-                            <h2 class="text-2xl font-bold text-secondary mb-4">Register New Patient</h2>
-                            <p class="text-gray-600 mb-8">
-                                Add a new patient record to the system. Fill out all required information including personal details and medical history.
-                            </p>
-                            <button onclick="openAddPatientModal()" class="btn-primary px-8 py-4 round-full text-lg font-semibold">
-                                <i class="fas fa-plus-circle mr-3"></i>Add New Patient
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
         </div>
     </div>
 
     <!-- Enhanced Wider Modal for Viewing Patient Info -->
-    <div id="viewModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 modal" style="display: none;">
-        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-7xl max-h-[95vh] overflow-hidden flex flex-col border-2 border-primary">
-            <!-- Sticky Header -->
-            <div class="sticky top-0 z-20 bg-[#2563EB] px-10 py-6 flex items-center">
-                <h3 class="text-2xl font-medium flex justify-center text-center w-full items-center text-white">
-                    <span class="text-white">Patient Health Information</span>
-                </h3>
-                <button onclick="closeViewModal()" class="border-2 border-white text-white hover:bg-white/20 rounded-full w-8 h-8 flex items-center justify-center transition">
-                    <i class="fas fa-times text-xl"></i>
-                </button>
-            </div>
+<div id="viewModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 modal" style="display: none;">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-7xl max-h-[95vh] overflow-hidden flex flex-col border-2 border-primary">
+        <!-- Sticky Header -->
+        <div class="sticky top-0 z-20 bg-[#2563EB] px-10 py-6 flex items-center">
+            <h3 class="text-2xl font-medium flex justify-center text-center w-full items-center text-white">
+                <span class="text-white">Patient Health Information</span>
+            </h3>
+            <button onclick="closeViewModal()" class="border-2 border-white text-white hover:bg-white/20 rounded-full w-8 h-8 flex items-center justify-center transition">
+                <i class="fas fa-times text-xl"></i>
+            </button>
+        </div>
 
-            <!-- Scrollable Content -->
-            <div class="px-16 bg-gray-50 flex-1 overflow-y-auto">
-                <div id="modalContent" class="min-h-[500px]">
-                    <!-- Content will be loaded via AJAX -->
-                    <div class="flex justify-center items-center py-20">
-                        <div class="text-center">
-                            <i class="fas fa-spinner fa-spin text-5xl text-primary mb-4"></i>
-                            <p class="text-lg text-gray-600 font-medium">Loading patient data...</p>
-                        </div>
+        <!-- Scrollable Content -->
+        <div class="px-16 bg-gray-50 flex-1 overflow-y-auto">
+            <div id="modalContent" class="min-h-[500px]">
+                <!-- Content will be loaded via AJAX -->
+                <div class="flex justify-center items-center py-20">
+                    <div class="text-center">
+                        <i class="fas fa-spinner fa-spin text-5xl text-primary mb-4"></i>
+                        <p class="text-lg text-gray-600 font-medium">Loading patient data...</p>
+                        <p class="text-sm text-gray-500 mt-2">Please wait while we retrieve the information</p>
                     </div>
                 </div>
             </div>
+        </div>
 
-            <!-- Sticky Footer -->
-            <div class="p-8 border-t border-gray-200 bg-white rounded-b-2xl sticky bottom-0">
-                <div class="flex flex-wrap items-center justify-between">
-                    <div class="flex flex-col items-start">
-                        <span class="flex items-center text-center gap-3 text-md text-gray-500 bg-gray-100 px-8 py-5 rounded-full">
-                            <svg width="34" height="34" viewBox="0 0 34 34" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                <path fill-rule="evenodd" clip-rule="evenodd" d="M16.6667 33.3333C25.8717 33.3333 33.3333 25.8717 33.3333 16.6667C33.3333 7.46167 25.8717 0 16.6667 0C7.46167 0 0 7.46167 0 16.6667C0 25.8717 7.46167 33.3333 16.6667 33.3333ZM19.1667 9.58333C19.1667 10.3569 18.8594 11.0987 18.3124 11.6457C17.7654 12.1927 17.0235 12.5 16.25 12.5C15.4765 12.5 14.7346 12.1927 14.1876 11.6457C13.6406 11.0987 13.3333 10.3569 13.3333 9.58333C13.3333 8.80978 13.6406 8.06792 14.1876 7.52094C14.7346 6.97396 15.4765 6.66667 16.25 6.66667C17.0235 6.66667 17.7654 6.97396 18.3124 7.52094C18.8594 8.06792 19.1667 8.80978 19.1667 9.58333ZM17.6008 14.87C17.8264 15.0227 18.0111 15.2283 18.1388 15.4689C18.2665 15.7094 18.3333 15.9776 18.3333 16.25V22.72L19.9117 21.9308L21.4033 24.9117L17.4117 26.9075C17.1576 27.0345 16.8752 27.0944 16.5915 27.0816C16.3077 27.0688 16.0319 26.9836 15.7903 26.8343C15.5487 26.6849 15.3493 26.4763 15.2109 26.2282C15.0726 25.9801 15 25.7007 15 25.4167V18.7117L13.655 19.25L12.4167 16.155L16.0475 14.7025C16.3003 14.6013 16.5741 14.5635 16.8449 14.5926C17.1157 14.6216 17.3752 14.7174 17.6008 14.87Z" fill="black" fill-opacity="0.25" />
-                            </svg>
-                            View and edit patient information
-                        </span>
+        <!-- Sticky Footer -->
+        <div class="p-8 border-t border-gray-200 bg-white rounded-b-2xl sticky bottom-0">
+            <div class="flex flex-wrap items-center justify-between">
+                <div class="flex flex-col items-start">
+                    <span class="flex items-center text-center gap-3 text-md text-gray-500 bg-gray-100 px-8 py-5 rounded-full">
+                        <svg width="34" height="34" viewBox="0 0 34 34" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path fill-rule="evenodd" clip-rule="evenodd" d="M16.6667 33.3333C25.8717 33.3333 33.3333 25.8717 33.3333 16.6667C33.3333 7.46167 25.8717 0 16.6667 0C7.46167 0 0 7.46167 0 16.6667C0 25.8717 7.46167 33.3333 16.6667 33.3333ZM19.1667 9.58333C19.1667 10.3569 18.8594 11.0987 18.3124 11.6457C17.7654 12.1927 17.0235 12.5 16.25 12.5C15.4765 12.5 14.7346 12.1927 14.1876 11.6457C13.6406 11.0987 13.3333 10.3569 13.3333 9.58333C13.3333 8.80978 13.6406 8.06792 14.1876 7.52094C14.7346 6.97396 15.4765 6.66667 16.25 6.66667C17.0235 6.66667 17.7654 6.97396 18.3124 7.52094C18.8594 8.06792 19.1667 8.80978 19.1667 9.58333ZM17.6008 14.87C17.8264 15.0227 18.0111 15.2283 18.1388 15.4689C18.2665 15.7094 18.3333 15.9776 18.3333 16.25V22.72L19.9117 21.9308L21.4033 24.9117L17.4117 26.9075C17.1576 27.0345 16.8752 27.0944 16.5915 27.0816C16.3077 27.0688 16.0319 26.9836 15.7903 26.8343C15.5487 26.6849 15.3493 26.4763 15.2109 26.2282C15.0726 25.9801 15 25.7007 15 25.4167V18.7117L13.655 19.25L12.4167 16.155L16.0475 14.7025C16.3003 14.6013 16.5741 14.5635 16.8449 14.5926C17.1157 14.6216 17.3752 14.7174 17.6008 14.87Z" fill="black" fill-opacity="0.25" />
+                        </svg>
+                        View and edit patient information
+                    </span>
+                </div>
+                <div class="flex space-x-4">
+                    <div class="flex flex-col items-center mt-2">
+                        <button onclick="printPatientRecord()" class="btn-export text-lg px-8 py-3 font-semibold">
+                            <i class="fas fa-print mr-3"></i>Print Patient Records
+                        </button>
                     </div>
-                    <div class="flex space-x-4">
-                        <div class="flex flex-col items-center mt-2">
-                            <button onclick="printPatientRecord()" class="btn-export text-lg px-8 py-3 font-semibold">
-                                <i class="fas fa-print mr-3"></i>Print Patient Records
-                            </button>
-                        </div>
-                        <div class="flex flex-col items-center">
-                            <button id="noteButton" onclick="openConsultationNoteModal()" class="btn-add-note px-8 py-5 text-lg font-semibold">
-                                <i class="fas fa-sticky-note mr-2"></i>Add Note
-                            </button>
-                        </div>
-                        <div class="flex flex-col items-center">
-                            <button id="saveMedicalBtn" type="button" onclick="saveMedicalInformation()" class="btn-save-medical px-8 py-5 text-lg font-semibold">
-                                <i class="fas fa-save mr-2"></i>Save Medical Information
-                            </button>
-                        </div>
+                    <div class="flex flex-col items-center">
+                        <button id="noteButton" onclick="openConsultationNoteModal()" class="btn-add-note px-8 py-5 text-lg font-semibold">
+                            <i class="fas fa-sticky-note mr-2"></i>Add Note
+                        </button>
+                    </div>
+                    <div class="flex flex-col items-center">
+                        <button id="saveMedicalBtn" type="button" onclick="saveMedicalInformation()" class="btn-save-medical px-8 py-5 text-lg font-semibold">
+                            <i class="fas fa-save mr-2"></i>Save All Information
+                        </button>
                     </div>
                 </div>
             </div>
         </div>
     </div>
+</div>
 
     <!-- Consultation Note Modal -->
     <div id="consultationNoteModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 modal" style="display: none;">
@@ -3196,6 +3363,52 @@ if (!empty($searchTerm)) {
 
         function closeNoteDetails() {
             closeCustomModal();
+        }
+
+        // Manual Export confirmation
+        function confirmManualExport(format) {
+            const checkboxes = document.querySelectorAll('.patient-select:checked');
+            if (checkboxes.length === 0) {
+                showNotification('error', 'Please select at least one patient to export.');
+                return;
+            }
+
+            const selectedPatients = Array.from(checkboxes).map(cb => cb.value);
+            const form = document.getElementById('patientSelectionForm');
+            
+            const hiddenInput = document.createElement('input');
+            hiddenInput.type = 'hidden';
+            hiddenInput.name = 'selected_patients[]';
+            
+            if (format === 'excel') {
+                const exportInput = document.createElement('input');
+                exportInput.type = 'hidden';
+                exportInput.name = 'export_manual';
+                exportInput.value = '1';
+                form.appendChild(exportInput);
+                
+                selectedPatients.forEach(patientId => {
+                    const patientInput = hiddenInput.cloneNode();
+                    patientInput.value = patientId;
+                    form.appendChild(patientInput);
+                });
+                
+                form.submit();
+            } else if (format === 'pdf') {
+                const pdfInput = document.createElement('input');
+                pdfInput.type = 'hidden';
+                pdfInput.name = 'export_pdf';
+                pdfInput.value = '1';
+                form.appendChild(pdfInput);
+                
+                selectedPatients.forEach(patientId => {
+                    const patientInput = hiddenInput.cloneNode();
+                    patientInput.value = patientId;
+                    form.appendChild(patientInput);
+                });
+                
+                form.submit();
+            }
         }
     </script>
 </body>

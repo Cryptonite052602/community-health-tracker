@@ -1,8 +1,7 @@
 <?php
-// get_patient_data.php
 session_start();
 require_once __DIR__ . '/../includes/auth.php';
-
+require_once __DIR__ . '/../config/database.php';
 
 redirectIfNotLoggedIn();
 
@@ -66,23 +65,23 @@ try {
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             <!-- Full Name -->
             <div>
-                <label class="form-label-modal">Full Name</label>
-                <input type="text" value="<?= htmlspecialchars($patientData['full_name'] ?? '') ?>" 
-                       class="form-input-modal readonly-field" readonly>
+                <label class="form-label-modal required-field">Full Name</label>
+                <input type="text" name="full_name" value="<?= htmlspecialchars($patientData['full_name'] ?? '') ?>" 
+                       required class="form-input-modal" placeholder="Enter full name">
             </div>
 
             <!-- Date of Birth -->
             <div>
-                <label class="form-label-modal">Date of Birth</label>
-                <input type="text" value="<?= !empty($patientData['date_of_birth']) ? date('F d, Y', strtotime($patientData['date_of_birth'])) : 'N/A' ?>" 
-                       class="form-input-modal readonly-field" readonly>
+                <label class="form-label-modal required-field">Date of Birth</label>
+                <input type="date" name="date_of_birth" value="<?= $patientData['date_of_birth'] ?? '' ?>" 
+                       required max="<?= date('Y-m-d') ?>" class="form-input-modal">
             </div>
 
             <!-- Age -->
             <div>
-                <label class="form-label-modal">Age</label>
-                <input type="text" value="<?= $patientData['age'] ?? 'N/A' ?>" 
-                       class="form-input-modal readonly-field" readonly>
+                <label class="form-label-modal">Age (Auto-calculated)</label>
+                <input type="number" name="age" value="<?= $patientData['age'] ?? '' ?>" 
+                       readonly class="form-input-modal readonly-field bg-gray-50">
             </div>
 
             <!-- Gender -->
@@ -98,37 +97,52 @@ try {
 
             <!-- Address -->
             <div>
-                <label class="form-label-modal">Address</label>
-                <input type="text" value="<?= htmlspecialchars($patientData['address'] ?? '') ?>" 
-                       class="form-input-modal readonly-field" readonly>
+                <label class="form-label-modal required-field">Address</label>
+                <input type="text" name="address" value="<?= htmlspecialchars($patientData['address'] ?? '') ?>" 
+                       required class="form-input-modal" placeholder="Enter complete address">
             </div>
 
             <!-- Sitio -->
             <div>
-                <label class="form-label-modal">Sitio</label>
-                <input type="text" value="<?= htmlspecialchars($patientData['sitio'] ?? '') ?>" 
-                       class="form-input-modal readonly-field" readonly>
+                <label class="form-label-modal required-field">Sitio</label>
+                <select name="sitio" required class="form-select-modal">
+                    <option value="">Select Sitio</option>
+                    <option value="Proper Luz" <?= ($patientData['sitio'] ?? '') == 'Proper Luz' ? 'selected' : '' ?>>Proper Luz</option>
+                    <option value="Lower Luz" <?= ($patientData['sitio'] ?? '') == 'Lower Luz' ? 'selected' : '' ?>>Lower Luz</option>
+                    <option value="Upper Luz" <?= ($patientData['sitio'] ?? '') == 'Upper Luz' ? 'selected' : '' ?>>Upper Luz</option>
+                    <option value="Luz Proper" <?= ($patientData['sitio'] ?? '') == 'Luz Proper' ? 'selected' : '' ?>>Luz Proper</option>
+                    <option value="Luz Heights" <?= ($patientData['sitio'] ?? '') == 'Luz Heights' ? 'selected' : '' ?>>Luz Heights</option>
+                    <option value="Panganiban" <?= ($patientData['sitio'] ?? '') == 'Panganiban' ? 'selected' : '' ?>>Panganiban</option>
+                    <option value="Balagtas" <?= ($patientData['sitio'] ?? '') == 'Balagtas' ? 'selected' : '' ?>>Balagtas</option>
+                    <option value="Carbon" <?= ($patientData['sitio'] ?? '') == 'Carbon' ? 'selected' : '' ?>>Carbon</option>
+                </select>
             </div>
 
             <!-- Civil Status -->
             <div>
-                <label class="form-label-modal">Civil Status</label>
-                <input type="text" value="<?= htmlspecialchars($patientData['civil_status'] ?? 'N/A') ?>" 
-                       class="form-input-modal readonly-field" readonly>
+                <label class="form-label-modal required-field">Civil Status</label>
+                <select name="civil_status" required class="form-select-modal">
+                    <option value="">Select Status</option>
+                    <option value="Single" <?= ($patientData['civil_status'] ?? '') == 'Single' ? 'selected' : '' ?>>Single</option>
+                    <option value="Married" <?= ($patientData['civil_status'] ?? '') == 'Married' ? 'selected' : '' ?>>Married</option>
+                    <option value="Widowed" <?= ($patientData['civil_status'] ?? '') == 'Widowed' ? 'selected' : '' ?>>Widowed</option>
+                    <option value="Separated" <?= ($patientData['civil_status'] ?? '') == 'Separated' ? 'selected' : '' ?>>Separated</option>
+                    <option value="Divorced" <?= ($patientData['civil_status'] ?? '') == 'Divorced' ? 'selected' : '' ?>>Divorced</option>
+                </select>
             </div>
 
             <!-- Occupation -->
             <div>
                 <label class="form-label-modal">Occupation</label>
-                <input type="text" value="<?= htmlspecialchars($patientData['occupation'] ?? 'N/A') ?>" 
-                       class="form-input-modal readonly-field" readonly>
+                <input type="text" name="occupation" value="<?= htmlspecialchars($patientData['occupation'] ?? '') ?>" 
+                       class="form-input-modal" placeholder="Enter occupation">
             </div>
 
             <!-- Contact Number -->
             <div>
-                <label class="form-label-modal">Contact Number</label>
-                <input type="text" value="<?= htmlspecialchars($patientData['contact'] ?? '') ?>" 
-                       class="form-input-modal readonly-field" readonly>
+                <label class="form-label-modal required-field">Contact Number</label>
+                <input type="text" name="contact" value="<?= htmlspecialchars($patientData['contact'] ?? '') ?>" 
+                       required class="form-input-modal" placeholder="Enter contact number">
             </div>
 
             <!-- PHIC No. -->
@@ -164,8 +178,8 @@ try {
             <!-- Last Checkup -->
             <div>
                 <label class="form-label-modal">Last Check-up Date</label>
-                <input type="text" value="<?= !empty($patientData['last_checkup']) ? date('F d, Y', strtotime($patientData['last_checkup'])) : 'N/A' ?>" 
-                       class="form-input-modal readonly-field" readonly>
+                <input type="date" name="last_checkup" value="<?= $patientData['last_checkup'] ?? '' ?>" 
+                       class="form-input-modal">
             </div>
         </div>
     </div>
@@ -263,7 +277,7 @@ try {
         </div>
     </div>
 
-    <!-- Additional Information -->
+    <!-- Additional Information (Readonly) -->
     <div class="bg-white p-8 rounded-2xl border-2 border-blue-100">
         <h4 class="form-section-title-modal text-2xl mb-6">
             <i class="fas fa-info-circle mr-3"></i>Additional Information
