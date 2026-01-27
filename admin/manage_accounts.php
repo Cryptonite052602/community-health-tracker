@@ -1450,43 +1450,32 @@ try {
             </div>
             
             <!-- Stats Grid -->
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
-                <div class="stat-card">
-                    <h3>Active Staff</h3>
-                    <div class="number"><?= count($activeStaff) ?></div>
-                    <p class="text-sm text-green-600 mt-2">
-                        <i class="fas fa-check-circle"></i> Operational
-                    </p>
-                </div>
-                <div class="stat-card">
-                    <h3>Inactive Staff</h3>
-                    <div class="number"><?= count($inactiveStaff) ?></div>
-                    <p class="text-sm text-gray-500 mt-2">
-                        <i class="fas fa-pause-circle"></i> Suspended
-                    </p>
-                </div>
-                <div class="stat-card">
-                    <h3>Approved Residents</h3>
-                    <div class="number"><?= count($approvedResidents) ?></div>
-                    <p class="text-sm text-green-600 mt-2">
-                        <i class="fas fa-check-circle"></i> Active
-                    </p>
-                </div>
-                <div class="stat-card">
-                    <h3>Pending Residents</h3>
-                    <div class="number"><?= count($pendingResidents) ?></div>
-                    <p class="text-sm text-yellow-600 mt-2">
-                        <i class="fas fa-clock"></i> Awaiting approval
-                    </p>
-                </div>
-                <div class="stat-card">
-                    <h3>Unlinked Accounts</h3>
-                    <div class="number"><?= count($unlinkedResidents) ?></div>
-                    <p class="text-sm text-orange-600 mt-2">
-                        <i class="fas fa-unlink"></i> Need patient record
-                    </p>
-                </div>
-            </div>
+<div class="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-4 mb-8">
+    <div class="stat-card">
+        <h3>Active Staff</h3>
+        <div class="number"><?= count($activeStaff) ?></div>
+        <p class="text-sm text-green-600 mt-2">
+            <i class="fas fa-check-circle"></i> Operational
+        </p>
+    </div>
+
+    <div class="stat-card">
+        <h3>Inactive Staff</h3>
+        <div class="number"><?= count($inactiveStaff) ?></div>
+        <p class="text-sm text-gray-500 mt-2">
+            <i class="fas fa-pause-circle"></i> Suspended
+        </p>
+    </div>
+
+    <div class="stat-card">
+        <h3>Unlinked Accounts</h3>
+        <div class="number"><?= count($unlinkedResidents) ?></div>
+        <p class="text-sm text-orange-600 mt-2">
+            <i class="fas fa-unlink"></i> Need patient record
+        </p>
+    </div>
+</div>
+
         </div>
 
         <!-- Main Tabs -->
