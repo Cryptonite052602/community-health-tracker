@@ -17,6 +17,6 @@ Members:
 
 Project Name: Barangay Luz Health Monitoring and Tracking System
 
-Version 1.0
+Version 1.1
 
 Updated - January 08, 2026
