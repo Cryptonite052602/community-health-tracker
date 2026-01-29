@@ -58,7 +58,16 @@ try {
                     <div class="note-header">
                         <div>
                             <div class="note-date">' . $noteDate . '</div>
-                            <div class="text-xs text-gray-500 mt-1">By: ' . htmlspecialchars($note['created_by_name'] ?? 'Staff') . '</div>
+                            <div class="text-xs text-gray-500 mt-1">';
+            
+            // Display doctor name if available
+            if (!empty($note['doctor_name'])) {
+                echo '<i class="fas fa-user-md mr-1 text-blue-500"></i> ' . htmlspecialchars($note['doctor_name']);
+            } else {
+                echo 'By: ' . htmlspecialchars($note['created_by_name'] ?? 'Staff');
+            }
+            
+            echo '</div>
                         </div>
                         <span class="note-badge">Note</span>
                     </div>

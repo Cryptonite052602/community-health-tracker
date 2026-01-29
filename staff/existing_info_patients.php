@@ -22,6 +22,7 @@ $phicNoExists = false;
 $bhwAssignedExists = false;
 $familyNoExists = false;
 $fourpsMemberExists = false;
+$doctorNameExists = false;
 
 try {
     // Check columns
@@ -60,6 +61,15 @@ try {
         $pdo->exec("ALTER TABLE sitio1_patients ADD COLUMN date_of_birth DATE NULL AFTER full_name");
     }
 
+    // Check if doctor_name column exists in consultation_notes
+    $stmt = $pdo->prepare("SHOW COLUMNS FROM consultation_notes LIKE 'doctor_name'");
+    $stmt->execute();
+    $doctorNameExists = $stmt->rowCount() > 0;
+    
+    if (!$doctorNameExists) {
+        $pdo->exec("ALTER TABLE consultation_notes ADD COLUMN doctor_name VARCHAR(255) NULL AFTER note");
+    }
+
     // Check if consultation_notes table exists
     $stmt = $pdo->prepare("SHOW TABLES LIKE 'consultation_notes'");
     $stmt->execute();
@@ -68,6 +78,7 @@ try {
             id INT AUTO_INCREMENT PRIMARY KEY,
             patient_id INT NOT NULL,
             note TEXT NOT NULL,
+            doctor_name VARCHAR(255) NULL,
             consultation_date DATE NOT NULL,
             next_consultation_date DATE NULL,
             created_by INT NOT NULL,
@@ -117,6 +128,7 @@ try {
     // If we can't check columns, assume they don't exist
     $civilStatusExists = $occupationExists = $sitioExists = $dateOfBirthExists = 
     $phicNoExists = $bhwAssignedExists = $familyNoExists = $fourpsMemberExists = false;
+    $doctorNameExists = false;
 }
 
 // Handle form submission for editing health info
@@ -355,14 +367,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_patient'])) {
     }
 }
 
-// Handle adding consultation note
+// Handle adding consultation note with doctor name
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_consultation_note'])) {
     $patient_id = $_POST['patient_id'];
     $note = trim($_POST['note']);
     $consultation_date = $_POST['consultation_date'];
     $next_consultation_date = !empty($_POST['next_consultation_date']) ? $_POST['next_consultation_date'] : null;
     
-    if (!empty($patient_id) && !empty($note) && !empty($consultation_date)) {
+    // Get doctor name with automatic "Dr." prefix
+    $doctor_name = trim($_POST['doctor_name']);
+    $full_doctor_name = 'Dr. ' . $doctor_name;
+    
+    if (!empty($patient_id) && !empty($note) && !empty($consultation_date) && !empty($doctor_name)) {
         try {
             // Verify patient belongs to current staff member
             $stmt = $pdo->prepare("SELECT id FROM sitio1_patients WHERE id = ? AND added_by = ?");
@@ -372,9 +388,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_consultation_note
                 $error = "Patient not found or access denied!";
             } else {
                 $stmt = $pdo->prepare("INSERT INTO consultation_notes 
-                    (patient_id, note, consultation_date, next_consultation_date, created_by) 
-                    VALUES (?, ?, ?, ?, ?)");
-                $stmt->execute([$patient_id, $note, $consultation_date, $next_consultation_date, $_SESSION['user']['id']]);
+                    (patient_id, note, doctor_name, consultation_date, next_consultation_date, created_by) 
+                    VALUES (?, ?, ?, ?, ?, ?)");
+                $stmt->execute([$patient_id, $note, $full_doctor_name, $consultation_date, $next_consultation_date, $_SESSION['user']['id']]);
                 $message = "Consultation note added successfully!";
             }
         } catch (PDOException $e) {
@@ -675,8 +691,7 @@ if (isset($_GET['export']) && $_GET['export'] == 'excel') {
         echo '</head>';
         echo '<body>';
         
-        // Add these styles for better readability
-echo '<style>
+        echo '<style>
     body {
         font-family: "Segoe UI", Arial, sans-serif;
         margin: 20px;
@@ -1304,35 +1319,262 @@ if (!empty($searchTerm)) {
         .btn-pdf { background-color: #e74c3c; color: white; border-radius: 30px; padding: 15px 25px; transition: all 0.3s ease; font-weight: 500; min-height: 45px; display: inline-flex; align-items: center; justify-content: center; border: 2px solid #e74c3c; }
         .btn-pdf:hover { background-color: #c0392b; border-color: #c0392b; transform: translateY(-2px); box-shadow: 0 4px 12px rgba(231, 76, 60, 0.15); }
         .selected-count-display { background-color: #d1fae5; color: #065f46; padding: 8px 16px; border-radius: 20px; font-weight: 600; display: inline-flex; align-items: center; border: 2px solid #10b981; }
-        .horizontal-notes-container { display: flex; overflow-x: auto; padding: 1rem 0.5rem; gap: 1rem; scrollbar-width: thin; scrollbar-color: #3498db #f0f9ff; }
-        .horizontal-notes-container::-webkit-scrollbar { height: 8px; }
-        .horizontal-notes-container::-webkit-scrollbar-track { background: #f0f9ff; border-radius: 4px; }
-        .horizontal-notes-container::-webkit-scrollbar-thumb { background: #3498db; border-radius: 4px; }
-        .note-card { flex: 0 0 300px; background: white; border-radius: 12px; border: 1px solid #e2e8f0; padding: 1.5rem; box-shadow: 0 2px 8px rgba(0,0,0,0.08); transition: all 0.3s ease; display: flex; flex-direction: column; min-height: 250px; max-height: 350px; }
-        .note-card:hover { transform: translateY(-4px); box-shadow: 0 8px 20px rgba(52, 152, 219, 0.15); border-color: #3498db; }
-        .note-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1rem; border-bottom: 2px solid #f0f9ff; padding-bottom: 0.75rem; }
-        .note-date { font-weight: 600; color: #2c3e50; font-size: 1rem; }
-        .note-badge { background: #3498db; color: white; font-size: 0.75rem; font-weight: 600; padding: 0.25rem 0.75rem; border-radius: 1rem; }
-        .note-content { flex: 1; overflow: hidden; position: relative; margin-bottom: 1rem; }
-        .note-text { color: #4b5563; line-height: 1.5; font-size: 0.875rem; max-height: 180px; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 8; -webkit-box-orient: vertical; }
-        .note-actions { display: flex; gap: 0.5rem; margin-top: auto; }
-        .btn-view-note { flex: 1; background: #e0f2fe; color: #0369a1; border: 1px solid #bae6fd; padding: 0.5rem; border-radius: 0.5rem; font-size: 0.75rem; font-weight: 500; cursor: pointer; transition: all 0.2s; text-align: center; }
-        .btn-view-note:hover { background: #bae6fd; }
-        .btn-use-note { flex: 1; background: #d1fae5; color: #065f46; border: 1px solid #a7f3d0; padding: 0.5rem; border-radius: 0.5rem; font-size: 0.75rem; font-weight: 500; cursor: pointer; transition: all 0.2s; text-align: center; }
-        .btn-use-note:hover { background: #a7f3d0; }
-        .empty-notes { text-align: center; padding: 3rem; background: #f8fafc; border-radius: 12px; border: 2px dashed #e2e8f0; width: 100%; }
-        .empty-notes i { font-size: 3rem; color: #cbd5e1; margin-bottom: 1rem; }
-        .empty-notes p { color: #64748b; margin-bottom: 1.5rem; }
-        .consultation-notes-section { margin-bottom: 2rem; background: white; border-radius: 12px; border: 2px solid #f0f9ff; overflow: hidden; }
-        .consultation-notes-header { background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%); padding: 1.5rem 2rem; border-bottom: 2px solid #bae6fd; }
-        .notes-count-badge { background: #3498db; color: white; font-size: 0.75rem; font-weight: 600; padding: 0.25rem 0.75rem; border-radius: 1rem; margin-left: 0.5rem; }
-        .notes-history-container { max-height: 400px; overflow-y: auto; padding: 1.5rem; }
-        .note-item { background: white; border: 1px solid #e2e8f0; border-left: 4px solid #3498db; border-radius: 8px; padding: 1.25rem; margin-bottom: 1rem; transition: all 0.3s ease; }
-        .note-item:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(52, 152, 219, 0.1); border-color: #3498db; }
-        .note-date { color: #2c3e50; font-weight: 600; font-size: 1rem; }
-        .note-next-date { color: #10b981; font-size: 0.875rem; background: #d1fae5; padding: 0.25rem 0.75rem; border-radius: 0.375rem; display: inline-flex; align-items: center; margin-top: 0.5rem; }
-        .note-preview { color: #4b5563; line-height: 1.5; margin: 0.75rem 0; font-size: 0.875rem; max-height: 4.5em; overflow: hidden; text-overflow: ellipsis; }
-        .note-meta { font-size: 0.75rem; color: #6b7280; display: flex; justify-content: space-between; align-items: center; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid #f3f4f6; }
+        
+        /* Horizontal notes container with oldest first */
+        .horizontal-notes-container {
+            display: flex;
+            overflow-x: auto;
+            padding: 1rem 0.5rem;
+            gap: 1rem;
+            scrollbar-width: thin;
+            scrollbar-color: #3498db #f0f9ff;
+            flex-direction: row-reverse; /* This puts oldest on left */
+            justify-content: flex-end;
+        }
+        
+        .horizontal-notes-container::-webkit-scrollbar {
+            height: 8px;
+        }
+        
+        .horizontal-notes-container::-webkit-scrollbar-track {
+            background: #f0f9ff;
+            border-radius: 4px;
+        }
+        
+        .horizontal-notes-container::-webkit-scrollbar-thumb {
+            background: #3498db;
+            border-radius: 4px;
+        }
+        
+        /* Note card styling for horizontal layout */
+        .note-card {
+            flex: 0 0 300px;
+            background: white;
+            border-radius: 12px;
+            border: 1px solid #e2e8f0;
+            padding: 1.5rem;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            transition: all 0.3s ease;
+            display: flex;
+            flex-direction: column;
+            min-height: 250px;
+            max-height: 350px;
+        }
+        
+        .note-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 8px 20px rgba(52, 152, 219, 0.15);
+            border-color: #3498db;
+        }
+        
+        /* Updated close button without border */
+        .modal-close-btn {
+            background: none;
+            border: none;
+            color: white;
+            font-size: 24px;
+            cursor: pointer;
+            width: 24px;
+            height: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0;
+            transition: color 0.2s ease;
+        }
+        
+        .modal-close-btn:hover {
+            color: rgba(255, 255, 255, 0.8);
+        }
+        
+        .note-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 1rem;
+            border-bottom: 2px solid #f0f9ff;
+            padding-bottom: 0.75rem;
+        }
+        
+        .note-date {
+            font-weight: 600;
+            color: #2c3e50;
+            font-size: 1rem;
+        }
+        
+        .note-badge {
+            background: #3498db;
+            color: white;
+            font-size: 0.75rem;
+            font-weight: 600;
+            padding: 0.25rem 0.75rem;
+            border-radius: 1rem;
+        }
+        
+        .note-content {
+            flex: 1;
+            overflow: hidden;
+            position: relative;
+            margin-bottom: 1rem;
+        }
+        
+        .note-text {
+            color: #4b5563;
+            line-height: 1.5;
+            font-size: 0.875rem;
+            max-height: 180px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            display: -webkit-box;
+            -webkit-line-clamp: 8;
+            -webkit-box-orient: vertical;
+        }
+        
+        .note-actions {
+            display: flex;
+            gap: 0.5rem;
+            margin-top: auto;
+        }
+        
+        .btn-view-note {
+            flex: 1;
+            background: #e0f2fe;
+            color: #0369a1;
+            border: 1px solid #bae6fd;
+            padding: 0.5rem;
+            border-radius: 0.5rem;
+            font-size: 0.75rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-align: center;
+        }
+        
+        .btn-view-note:hover {
+            background: #bae6fd;
+        }
+        
+        .btn-use-note {
+            flex: 1;
+            background: #d1fae5;
+            color: #065f46;
+            border: 1px solid #a7f3d0;
+            padding: 0.5rem;
+            border-radius: 0.5rem;
+            font-size: 0.75rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-align: center;
+        }
+        
+        .btn-use-note:hover {
+            background: #a7f3d0;
+        }
+        
+        .empty-notes {
+            text-align: center;
+            padding: 3rem;
+            background: #f8fafc;
+            border-radius: 12px;
+            border: 2px dashed #e2e8f0;
+            width: 100%;
+        }
+        
+        .empty-notes i {
+            font-size: 3rem;
+            color: #cbd5e1;
+            margin-bottom: 1rem;
+        }
+        
+        .empty-notes p {
+            color: #64748b;
+            margin-bottom: 1.5rem;
+        }
+        
+        .consultation-notes-section {
+            margin-bottom: 2rem;
+            background: white;
+            border-radius: 12px;
+            border: 2px solid #f0f9ff;
+            overflow: hidden;
+        }
+        
+        .consultation-notes-header {
+            background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+            padding: 1.5rem 2rem;
+            border-bottom: 2px solid #bae6fd;
+        }
+        
+        .notes-count-badge {
+            background: #3498db;
+            color: white;
+            font-size: 0.75rem;
+            font-weight: 600;
+            padding: 0.25rem 0.75rem;
+            border-radius: 1rem;
+            margin-left: 0.5rem;
+        }
+        
+        .notes-history-container {
+            max-height: 400px;
+            overflow-y: auto;
+            padding: 1.5rem;
+        }
+        
+        .note-item {
+            background: white;
+            border: 1px solid #e2e8f0;
+            border-left: 4px solid #3498db;
+            border-radius: 8px;
+            padding: 1.25rem;
+            margin-bottom: 1rem;
+            transition: all 0.3s ease;
+        }
+        
+        .note-item:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(52, 152, 219, 0.1);
+            border-color: #3498db;
+        }
+        
+        .note-date {
+            color: #2c3e50;
+            font-weight: 600;
+            font-size: 1rem;
+        }
+        
+        .note-next-date {
+            color: #10b981;
+            font-size: 0.875rem;
+            background: #d1fae5;
+            padding: 0.25rem 0.75rem;
+            border-radius: 0.375rem;
+            display: inline-flex;
+            align-items: center;
+            margin-top: 0.5rem;
+        }
+        
+        .note-preview {
+            color: #4b5563;
+            line-height: 1.5;
+            margin: 0.75rem 0;
+            font-size: 0.875rem;
+            max-height: 4.5em;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        
+        .note-meta {
+            font-size: 0.75rem;
+            color: #6b7280;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 1rem;
+            padding-top: 1rem;
+            border-top: 1px solid #f3f4f6;
+        }
     </style>
 </head>
 <body class="bg-gray-50">
@@ -1831,8 +2073,8 @@ if (!empty($searchTerm)) {
             <h3 class="text-2xl font-medium flex justify-center text-center w-full items-center text-white">
                 <span class="text-white">Patient Health Information</span>
             </h3>
-            <button onclick="closeViewModal()" class="border-2 border-white text-white hover:bg-white/20 rounded-full w-8 h-8 flex items-center justify-center transition">
-                <i class="fas fa-times text-xl"></i>
+            <button onclick="closeViewModal()" class="modal-close-btn">
+                <i class="fas fa-times"></i>
             </button>
         </div>
 
@@ -1868,11 +2110,6 @@ if (!empty($searchTerm)) {
                         </button>
                     </div>
                     <div class="flex flex-col items-center">
-                        <button id="noteButton" onclick="openConsultationNoteModal()" class="btn-add-note px-8 py-5 text-lg font-semibold">
-                            <i class="fas fa-sticky-note mr-2"></i>Add Note
-                        </button>
-                    </div>
-                    <div class="flex flex-col items-center">
                         <button id="saveMedicalBtn" type="button" onclick="saveMedicalInformation()" class="btn-save-medical px-8 py-5 text-lg font-semibold">
                             <i class="fas fa-save mr-2"></i>Save All Information
                         </button>
@@ -1892,8 +2129,8 @@ if (!empty($searchTerm)) {
                     <i class="fas fa-sticky-note mr-3"></i>
                     <span class="text-white" id="consultationNoteTitle">Add Consultation Note</span>
                 </h3>
-                <button onclick="closeConsultationNoteModal()" class="border-2 border-white text-white hover:bg-white/20 rounded-full w-8 h-8 flex items-center justify-center transition">
-                    <i class="fas fa-times text-xl"></i>
+                <button onclick="closeConsultationNoteModal()" class="modal-close-btn">
+                    <i class="fas fa-times"></i>
                 </button>
             </div>
 
@@ -1904,6 +2141,22 @@ if (!empty($searchTerm)) {
                     <form id="addNoteForm" method="POST" action="">
                         <input type="hidden" name="patient_id" id="notePatientId" value="">
                         <div class="space-y-6">
+                            <div>
+                                <label for="doctor_name" class="block text-gray-700 mb-2 font-medium">
+                                    Doctor's Name <span class="text-red-500">*</span>
+                                </label>
+                                <div class="flex gap-2">
+                                    <div class="w-24 px-3 py-3 border border-[#85ccfb] rounded-lg bg-gray-50 flex items-center justify-center text-gray-500">
+                                        Dr.
+                                    </div>
+                                    <input type="text" id="doctor_name" name="doctor_name" 
+                                           placeholder="Enter doctor's full name"
+                                           class="flex-1 px-4 py-3 border border-[#85ccfb] rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
+                                           required>
+                                </div>
+                                <p class="text-sm text-gray-500 mt-1">Format: Dr. [Full Name] (e.g., "Dr. Juan Dela Cruz")</p>
+                            </div>
+                            
                             <div>
                                 <label for="consultation_date" class="block text-gray-700 mb-2 font-medium">
                                     Consultation Date <span class="text-red-500">*</span>
@@ -1983,8 +2236,8 @@ if (!empty($searchTerm)) {
                     </svg>
                     Registration For New Patient
                 </h3>
-                <button onclick="closeAddPatientModal()" class="w-8 h-8 flex items-center justify-center transition">
-                    <i class="fas fa-times text-3xl text-white"></i>
+                <button onclick="closeAddPatientModal()" class="modal-close-btn">
+                    <i class="fas fa-times"></i>
                 </button>
             </div>
 
@@ -2323,6 +2576,9 @@ if (!empty($searchTerm)) {
                 modal.style.opacity = '1';
                 modal.style.transition = 'opacity 0.3s ease';
             }, 10);
+            
+            // Reset form to add mode
+            switchToAddNote();
         }
 
         function closeConsultationNoteModal() {
@@ -2388,7 +2644,6 @@ if (!empty($searchTerm)) {
                     }
                     badge.textContent = count;
                     
-                    noteButton.innerHTML = '<i class="fas fa-sticky-note mr-2"></i>View Doctors Note ';
                     noteButton.appendChild(badge);
                     noteButton.classList.remove('btn-add-note');
                     noteButton.classList.add('btn-view-notes');
@@ -2398,7 +2653,6 @@ if (!empty($searchTerm)) {
                         badge.remove();
                     }
                     
-                    noteButton.innerHTML = '<i class="fas fa-sticky-note mr-2"></i>Add Note';
                     noteButton.classList.remove('btn-view-notes');
                     noteButton.classList.add('btn-add-note');
                 }
@@ -2412,6 +2666,9 @@ if (!empty($searchTerm)) {
             document.getElementById('viewNotesContent').style.display = 'block';
             document.getElementById('addNoteActions').style.display = 'none';
             document.getElementById('viewNoteActions').style.display = 'block';
+            
+            // Load notes in view mode
+            loadConsultationNotes(currentPatientId);
         }
 
         function switchToAddNote() {
@@ -2426,6 +2683,12 @@ if (!empty($searchTerm)) {
             document.getElementById('consultation_date').value = today;
             document.getElementById('next_consultation_date').value = '';
             document.getElementById('note').value = '';
+            document.getElementById('doctor_name').value = '';
+            
+            // Focus on doctor name field
+            setTimeout(() => {
+                document.getElementById('doctor_name').focus();
+            }, 100);
         }
 
         function resetConsultationNoteModal() {
@@ -2440,8 +2703,9 @@ if (!empty($searchTerm)) {
             const note = document.getElementById('note').value.trim();
             const consultationDate = document.getElementById('consultation_date').value;
             const nextDate = document.getElementById('next_consultation_date').value;
+            const doctorName = document.getElementById('doctor_name').value.trim();
             
-            if (!patientId || !note || !consultationDate) {
+            if (!patientId || !note || !consultationDate || !doctorName) {
                 showNotification('error', 'Please fill in all required fields.');
                 return;
             }
@@ -2450,6 +2714,7 @@ if (!empty($searchTerm)) {
             formData.append('patient_id', patientId);
             formData.append('note', note);
             formData.append('consultation_date', consultationDate);
+            formData.append('doctor_name', doctorName);
             if (nextDate) {
                 formData.append('next_consultation_date', nextDate);
             }
@@ -2468,7 +2733,6 @@ if (!empty($searchTerm)) {
             .then(result => {
                 if (result.includes('successfully') || result.includes('Consultation note added')) {
                     showNotification('success', 'Consultation note added successfully!');
-                    document.getElementById('note').value = '';
                     closeConsultationNoteModal();
                     
                     setTimeout(() => {
@@ -2850,8 +3114,25 @@ if (!empty($searchTerm)) {
         // Print Patient Record Function
         function printPatientRecord() {
             const patientId = getPatientId();
+            
+            // Get the current consultation note ID if viewing a specific note
+            let noteId = null;
+            const noteModal = document.getElementById('consultationNoteModal');
+            if (noteModal && noteModal.style.display === 'flex') {
+                const noteIdInput = document.getElementById('notePatientId');
+                if (noteIdInput && noteIdInput.value) {
+                    // If we're viewing a specific note, get its ID
+                    noteId = getCurrentNoteId();
+                }
+            }
+            
             if (patientId) {
-                const printWindow = window.open(`/community-health-tracker/api/print_patient.php?id=${patientId}`, '_blank', 'width=1200,height=800');
+                let url = `/community-health-tracker/api/print_patient.php?id=${patientId}`;
+                if (noteId) {
+                    url += `&note_id=${noteId}`;
+                }
+                
+                const printWindow = window.open(url, '_blank', 'width=1200,height=800');
                 if (printWindow) {
                     printWindow.focus();
                     printWindow.onload = function () {
@@ -2867,32 +3148,17 @@ if (!empty($searchTerm)) {
             }
         }
 
-        function getPatientId() {
-            const selectors = [
-                '#healthInfoForm input[name="patient_id"]',
-                'input[name="patient_id"]',
-                '[name="patient_id"]',
-                '#patient_id',
-                '.patient-id-input'
-            ];
-
-            for (const selector of selectors) {
-                const element = document.querySelector(selector);
-                if (element && element.value) {
-                    return element.value;
+        // Helper function to get current note ID (implement based on your UI)
+        function getCurrentNoteId() {
+            // Check if we're viewing a specific note in the modal
+            const viewNotesContent = document.getElementById('viewNotesContent');
+            if (viewNotesContent && viewNotesContent.style.display !== 'none') {
+                // Look for active note in the notes list
+                const activeNote = document.querySelector('.note-card.active');
+                if (activeNote) {
+                    return activeNote.dataset.noteId;
                 }
             }
-
-            const modalContent = document.getElementById('modalContent');
-            if (modalContent) {
-                const hiddenInputs = modalContent.querySelectorAll('input[type="hidden"]');
-                for (const input of hiddenInputs) {
-                    if (input.name === 'patient_id' && input.value) {
-                        return input.value;
-                    }
-                }
-            }
-
             return null;
         }
 
@@ -3093,6 +3359,9 @@ if (!empty($searchTerm)) {
                     if (notesCountBadge) {
                         notesCountBadge.textContent = `${notesCount} note${notesCount !== 1 ? 's' : ''}`;
                     }
+                    
+                    // Update the note button in the footer
+                    updateNoteButtonCount(notesCount);
                 })
                 .catch(error => {
                     console.error('Error loading notes:', error);
@@ -3130,6 +3399,11 @@ if (!empty($searchTerm)) {
                                 </div>
                                 
                                 <div class="space-y-4">
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">Doctor:</label>
+                                        <div class="font-medium">${note.doctor_name || 'Not specified'}</div>
+                                    </div>
+                                    
                                     <div>
                                         <label class="block text-sm font-medium text-gray-700 mb-1">Note:</label>
                                         <div class="bg-gray-50 p-4 rounded-lg border border-gray-200">
@@ -3194,6 +3468,14 @@ if (!empty($searchTerm)) {
                     
                     <div class="space-y-6">
                         <div>
+                            <h5 class="text-sm font-medium text-gray-700 mb-2">Doctor:</h5>
+                            <div class="bg-blue-50 p-3 rounded-lg border border-blue-200 mb-4">
+                                <i class="fas fa-user-md mr-2 text-blue-600"></i>
+                                <span class="font-medium">${note.doctor_name || 'Not specified'}</span>
+                            </div>
+                        </div>
+                        
+                        <div>
                             <h5 class="text-sm font-medium text-gray-700 mb-2">Consultation Notes:</h5>
                             <div class="bg-gray-50 p-4 rounded-lg border border-gray-200 whitespace-pre-line">
                                 ${note.note}
@@ -3212,7 +3494,7 @@ if (!empty($searchTerm)) {
                         
                         <div class="pt-4 border-t border-gray-200">
                             <div class="flex items-center text-sm text-gray-500">
-                                <i class="fas fa-user-md mr-2"></i>
+                                <i class="fas fa-user mr-2"></i>
                                 <span>Recorded by: ${note.created_by_name || 'Staff Member'}</span>
                                 <span class="mx-2">•</span>
                                 <i class="fas fa-clock mr-2"></i>
@@ -3308,6 +3590,14 @@ if (!empty($searchTerm)) {
                             const dateInput = document.getElementById('consultation_date');
                             if (dateInput) dateInput.value = today;
                             
+                            // Set doctor name from existing note
+                            const doctorNameInput = document.getElementById('doctor_name');
+                            if (doctorNameInput && note.doctor_name) {
+                                // Extract just the name part (remove "Dr." prefix)
+                                const doctorName = note.doctor_name.replace(/^Dr\.\s*/i, '');
+                                doctorNameInput.value = doctorName;
+                            }
+                            
                             if (noteTextarea) noteTextarea.focus();
                         }, 300);
                     }
@@ -3329,7 +3619,7 @@ if (!empty($searchTerm)) {
                     <div class="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden">
                         <div id="customModalHeader" class="sticky top-0 bg-primary px-6 py-4 text-white flex justify-between items-center">
                             <h3 class="text-lg font-semibold"></h3>
-                            <button onclick="closeCustomModal()" class="text-white hover:text-gray-200">
+                            <button onclick="closeCustomModal()" class="modal-close-btn">
                                 <i class="fas fa-times"></i>
                             </button>
                         </div>
@@ -3410,6 +3700,31 @@ if (!empty($searchTerm)) {
                 form.submit();
             }
         }
+
+        // Get patient ID from the form
+        function getPatientId() {
+            const patientIdInput = document.querySelector('#modalContent input[name="patient_id"]');
+            return patientIdInput ? patientIdInput.value : null;
+        }
+
+        // Update the note button to handle both add and view modes
+        function handleNoteButtonClick() {
+            if (noteCount > 0) {
+                openConsultationNoteModal();
+                switchToViewNotes();
+            } else {
+                openConsultationNoteModal();
+                switchToAddNote();
+            }
+        }
+
+        // Update the note button event listener
+        document.addEventListener('DOMContentLoaded', function() {
+            const noteButton = document.getElementById('noteButton');
+            if (noteButton) {
+                noteButton.addEventListener('click', handleNoteButtonClick);
+            }
+        });
     </script>
 </body>
 </html>

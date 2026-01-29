@@ -2118,9 +2118,6 @@ try {
                                             </div>
                                             <div class="flex-1 min-w-0">
                                                 <div class="font-semibold text-gray-800 truncate"><?= htmlspecialchars($patient['full_name']) ?></div>
-                                                <div class="text-xs text-gray-500 truncate mt-1">
-                                                    ID: <?= $patient['id'] ?>
-                                                </div>
                                                 <div class="flex flex-wrap gap-2 mt-2">
                                                     <?php if ($patient['age']): ?>
                                                         <span class="inline-flex items-center gap-1 text-xs text-gray-600 bg-gray-100 rounded-full px-2 py-1">

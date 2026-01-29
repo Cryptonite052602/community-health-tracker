@@ -22,7 +22,6 @@ try {
     $error = 'Error fetching user information: ' . $e->getMessage();
 }
 
-// Use database values as primary source
 $userEmail = $userInfo['email'] ?? $_SESSION['user']['email'] ?? 'Not provided';
 $userFullName = $userInfo['full_name'] ?? $_SESSION['user']['full_name'] ?? 'Not provided';
 $userDateOfBirth = $userInfo['date_of_birth'] ?? $_SESSION['user']['date_of_birth'] ?? null;
@@ -30,47 +29,31 @@ $userCreatedAt = $userInfo['created_at'] ?? $_SESSION['user']['created_at'] ?? d
 $error = '';
 $success = '';
 
-// Get ALL patient info linked to this user from sitio1_patients
+// Get ALL patient info linked to this user
 $allPatientInfo = [];
 try {
     $stmt = $pdo->prepare("
         SELECT 
             sp.id,
-            sp.user_id,
-            sp.phic_no,
-            sp.bhw_assigned,
-            sp.family_no,
-            sp.fourps_member,
             sp.full_name,
             sp.date_of_birth,
             sp.age,
-            sp.address,
+            sp.gender,
             sp.sitio,
             sp.disease,
-            sp.contact,
             sp.last_checkup,
-            sp.medical_history as patient_medical_history,
-            sp.added_by,
+            sp.phic_no,
+            sp.fourps_member,
+            sp.bhw_assigned,
+            sp.contact,
             sp.created_at,
-            sp.deleted_at,
-            sp.restored_at,
-            sp.gender as patient_gender,
-            sp.consultation_type,
-            sp.civil_status,
-            sp.occupation,
-            sp.consent_given,
-            sp.consent_date,
+            eip.blood_type,
             eip.height,
             eip.weight,
-            eip.blood_type,
             eip.allergies,
-            eip.medical_history as existing_medical_history,
             eip.current_medications,
-            eip.family_history,
-            eip.temperature,
             eip.blood_pressure,
-            eip.immunization_record,
-            eip.chronic_conditions
+            eip.temperature
         FROM sitio1_patients sp
         LEFT JOIN existing_info_patients eip ON sp.id = eip.patient_id
         WHERE sp.user_id = ? 
@@ -83,52 +66,31 @@ try {
     $error = 'Error fetching patient information: ' . $e->getMessage();
 }
 
-// Get consultation notes/visits for ALL patients linked to this user
+// Get consultation notes
 $allConsultationNotes = [];
-try {
-    if (!empty($allPatientInfo)) {
+if (!empty($allPatientInfo)) {
+    try {
         $patientIds = array_column($allPatientInfo, 'id');
         $placeholders = str_repeat('?,', count($patientIds) - 1) . '?';
         
         $stmt = $pdo->prepare("
             SELECT 
                 cn.*,
-                s.full_name as doctor_name
+                cn.doctor_name as doctor_name
             FROM consultation_notes cn
-            LEFT JOIN sitio1_staff s ON cn.created_by = s.id
             WHERE cn.patient_id IN ($placeholders)
             ORDER BY cn.consultation_date DESC
         ");
         $stmt->execute($patientIds);
-        $allConsultationNotes = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $allConsultationNotes = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    } catch (PDOException $e) {
+        // Consultation notes might not exist - not critical
     }
-} catch (PDOException $e) {
-    // Not critical if this fails - consultation notes table might not exist
 }
 
-// Group consultation notes by patient for display
-$consultationNotesByPatient = [];
-foreach ($allConsultationNotes as $note) {
-    $patientId = $note['patient_id'];
-    if (!isset($consultationNotesByPatient[$patientId])) {
-        // Find patient info
-        $patientInfo = null;
-        foreach ($allPatientInfo as $patient) {
-            if ($patient['id'] == $patientId) {
-                $patientInfo = $patient;
-                break;
-            }
-        }
-        $consultationNotesByPatient[$patientId] = [
-            'patient_info' => $patientInfo,
-            'notes' => []
-        ];
-    }
-    $consultationNotesByPatient[$patientId]['notes'][] = $note;
-}
-
-// Get total count of consultation notes
+// Calculate stats
 $totalConsultationNotes = count($allConsultationNotes);
+$totalPatients = count($allPatientInfo);
 ?>
 
 <!DOCTYPE html>
@@ -136,878 +98,623 @@ $totalConsultationNotes = count($allConsultationNotes);
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>My Health Profile</title>
+    <title>Health Profile - Barangay Luz</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-        :root {
-            --warm-blue: #3b82f6;
-            --warm-blue-light: #dbeafe;
-            --warm-blue-dark: #1e40af;
-            --text-dark: #1f2937;
-            --text-light: #6b7280;
-            --bg-light: #f9fafb;
-            --border-light: #e5e7eb;
-        }
-
-        body {
-            background-color: var(--bg-light);
-            color: var(--text-dark);
-            font-family: 'Inter', system-ui, -apple-system, sans-serif;
-        }
-
-        .btn-primary {
-            background-color: white;
-            border: 2px solid var(--warm-blue);
-            color: var(--warm-blue);
-            transition: all 0.3s ease;
-        }
-
-        .btn-primary:hover {
-            background-color: var(--warm-blue-light);
-            transform: translateY(-2px);
-        }
-
-        .nav-pill {
-            background-color: white;
-            border: 2px solid var(--warm-blue);
-            color: var(--warm-blue);
-            transition: all 0.3s ease;
-        }
-
-        .nav-pill.active {
-            background-color: var(--warm-blue);
-            color: white;
-        }
-
-        .nav-pill:hover:not(.active) {
-            background-color: var(--warm-blue-light);
-        }
-
-        .info-card {
-            background-color: white;
-            border-radius: 12px;
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-            border: 1px solid var(--border-light);
-        }
-
-        .consultation-note-item {
-            background-color: white;
-            border-radius: 12px;
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-            border: 1px solid var(--border-light);
-            border-left: 4px solid var(--warm-blue);
-        }
-
-        .patient-section {
-            background-color: white;
-            border-radius: 12px;
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-            border: 1px solid var(--border-light);
-            margin-bottom: 2rem;
-            overflow: hidden;
-        }
-
-        .patient-header {
-            background: linear-gradient(135deg, var(--warm-blue-light) 0%, #e0f2fe 100%);
-            padding: 1.5rem;
-            border-bottom: 2px solid var(--border-light);
-        }
-
-        .modal-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background-color: rgba(0, 0, 0, 0.5);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            z-index: 1000;
-            opacity: 0;
-            visibility: hidden;
-            transition: all 0.3s ease;
-        }
-
-        .modal-overlay.active {
-            opacity: 1;
-            visibility: visible;
-        }
-
-        .modal-content {
-            background-color: white;
-            border-radius: 12px;
-            max-width: 800px;
-            width: 90%;
-            max-height: 90vh;
-            overflow-y: auto;
-            padding: 2rem;
-            position: relative;
-            transform: translateY(-20px);
-            transition: transform 0.3s ease;
-        }
-
-        .modal-overlay.active .modal-content {
-            transform: translateY(0);
-        }
-
-        .section-title {
-            position: relative;
-            padding-left: 1rem;
-        }
-
-        .section-title:before {
-            content: '';
-            position: absolute;
-            left: 0;
-            top: 50%;
-            transform: translateY(-50%);
-            width: 4px;
-            height: 20px;
-            background: var(--warm-blue);
-            border-radius: 4px;
-        }
-
-        .tab-content {
-            display: none;
-        }
-
-        .tab-content.active {
-            display: block;
-        }
-
-        .patient-badge {
-            background-color: var(--warm-blue-light);
-            color: var(--warm-blue-dark);
-            padding: 0.25rem 0.75rem;
-            border-radius: 9999px;
-            font-size: 0.75rem;
-            font-weight: 600;
-        }
-
-        .no-records-message {
-            background-color: #f9fafb;
-            border: 2px dashed #d1d5db;
-            border-radius: 12px;
-            padding: 3rem;
-            text-align: center;
-        }
-
-        .health-badge {
-            display: inline-flex;
-            align-items: center;
-            padding: 0.25rem 0.75rem;
-            border-radius: 9999px;
-            font-size: 0.75rem;
-            font-weight: 600;
-            margin-right: 0.5rem;
-            margin-bottom: 0.5rem;
-        }
-
-        .badge-phic {
-            background-color: #d1fae5;
-            color: #065f46;
-        }
-
-        .badge-4ps {
-            background-color: #fef3c7;
-            color: #92400e;
-        }
-
-        .badge-bhw {
-            background-color: #dbeafe;
-            color: #1e40af;
-        }
-
-        .badge-family {
-            background-color: #f3e8ff;
-            color: #7c3aed;
-        }
+        .icon-xs { font-size: 0.75rem; }
+        .icon-sm { font-size: 0.875rem; }
+        .icon-base { font-size: 1rem; }
+        .icon-lg { font-size: 1.125rem; }
+        .icon-xl { font-size: 1.25rem; }
+        .icon-2xl { font-size: 1.5rem; }
+        .icon-3xl { font-size: 1.875rem; }
+        .icon-4xl { font-size: 2.25rem; }
     </style>
 </head>
-<body class="min-h-screen">
-    <div class="container mx-auto px-4 py-8 max-w-7xl">
-        <!-- Header -->
-        <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-8">
-            <div class="mb-6 md:mb-0">
-                <h1 class="text-3xl font-bold text-gray-800">My Health Profile</h1>
-                <p class="text-gray-600 mt-2">View your medical history and health records</p>
-            </div>
-            <div class="flex items-center bg-white p-6 rounded-2xl shadow-sm border border-gray-200">
-                <div class="w-16 h-16 bg-blue-100 rounded-2xl flex items-center justify-center mr-4">
-                    <i class="fas fa-user text-blue-500 text-2xl"></i>
+<body class="bg-gray-50 min-h-screen font-sans">
+    <!-- Top Navigation -->
+    <nav class="bg-white shadow-sm border-b">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16">
+                <div class="flex items-center">
+                    <div class="flex items-center">
+                        <i class="fas fa-heartbeat text-blue-600 icon-xl mr-3"></i>
+                        <span class="font-bold text-gray-900 text-lg">Barangay Luz Health</span>
+                    </div>
                 </div>
-                <div>
-                    <p class="font-semibold text-gray-800 text-lg"><?= htmlspecialchars($userFullName) ?></p>
-                    <p class="text-sm text-gray-500">Email: <?= htmlspecialchars($userEmail) ?></p>
-                    <p class="text-sm text-gray-500">
-                        Linked Patients: <?= count($allPatientInfo) ?> 
-                        • Total Consultations: <?= $totalConsultationNotes ?>
-                    </p>
+                <div class="flex items-center space-x-4">
+                    <div class="text-right hidden sm:block">
+                        <p class="text-sm font-bold text-gray-900"><?php echo htmlspecialchars($userFullName); ?></p>
+                        <p class="text-xs text-gray-500">Patient Portal</p>
+                    </div>
+                    <div class="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center">
+                        <i class="fas fa-user text-blue-600 icon-sm"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="max-w-7xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
+        <!-- Header Section -->
+        <div class="mb-8">
+            <h1 class="text-3xl font-bold text-gray-900 mb-2">Health Profile</h1>
+            <p class="text-gray-600">View and manage your medical records</p>
+        </div>
+
+        <?php if (!empty($error)): ?>
+            <div class="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
+                <div class="flex items-center">
+                    <i class="fas fa-exclamation-circle text-red-500 icon-lg mr-3"></i>
+                    <p class="text-red-800 font-bold"><?php echo htmlspecialchars($error); ?></p>
+                </div>
+            </div>
+        <?php endif; ?>
+
+        <!-- Stats Cards -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+            <div class="bg-white rounded-lg shadow p-5 hover:shadow-md transition-shadow">
+                <div class="flex items-center">
+                    <div class="w-12 h-12 rounded-lg bg-blue-50 flex items-center justify-center mr-4">
+                        <i class="fas fa-users text-blue-600 icon-xl"></i>
+                    </div>
+                    <div>
+                        <p class="text-sm text-gray-500 font-medium">Patients</p>
+                        <p class="text-3xl font-bold text-gray-900"><?php echo $totalPatients; ?></p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="bg-white rounded-lg shadow p-5 hover:shadow-md transition-shadow">
+                <div class="flex items-center">
+                    <div class="w-12 h-12 rounded-lg bg-green-50 flex items-center justify-center mr-4">
+                        <i class="fas fa-calendar-check text-green-600 icon-xl"></i>
+                    </div>
+                    <div>
+                        <p class="text-sm text-gray-500 font-medium">Consultations</p>
+                        <p class="text-3xl font-bold text-gray-900"><?php echo $totalConsultationNotes; ?></p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="bg-white rounded-lg shadow p-5 hover:shadow-md transition-shadow">
+                <div class="flex items-center">
+                    <div class="w-12 h-12 rounded-lg bg-purple-50 flex items-center justify-center mr-4">
+                        <i class="fas fa-heartbeat text-purple-600 icon-xl"></i>
+                    </div>
+                    <div>
+                        <p class="text-sm text-gray-500 font-medium">Status</p>
+                        <p class="text-xl font-bold text-green-600">Active</p>
+                    </div>
                 </div>
             </div>
         </div>
 
-        <?php if ($error): ?>
-            <div class="bg-red-50 border border-red-200 text-red-700 px-6 py-4 rounded-2xl mb-6 flex items-center">
-                <i class="fas fa-exclamation-circle mr-3"></i>
-                <?= htmlspecialchars($error) ?>
-            </div>
-        <?php endif; ?>
-        
-        <?php if ($success): ?>
-            <div class="bg-green-50 border border-green-200 text-green-700 px-6 py-4 rounded-2xl mb-6 flex items-center">
-                <i class="fas fa-check-circle mr-3"></i>
-                <?= htmlspecialchars($success) ?>
-            </div>
-        <?php endif; ?>
-
-        <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap" rel="stylesheet">
-
-<style>
-    .font-poppins {
-        font-family: 'Poppins', sans-serif;
-    }
-</style>
-
-<div class="bg-white rounded-2xl shadow-sm p-4 mb-8 flex flex-wrap border border-gray-200 font-poppins">
-    <button class="nav-pill active flex items-center mr-3 mb-2 px-4 py-2 rounded-full transition-all" data-tab="records">
-        <i class="fas fa-file-medical mr-2 text-sm"></i> 
-        <span class="text-sm font-medium">Health Records</span>
-        <span class="bg-blue-100 text-blue-800 text-xs font-semibold ml-2 px-3 py-0.5 rounded-full">
-            <?= $totalConsultationNotes ?>
-        </span>
-    </button>
-
-    <button class="nav-pill flex items-center mr-3 mb-2 px-4 py-2 rounded-full transition-all" data-tab="patients">
-        <i class="fas fa-users mr-2 text-sm"></i> 
-        <span class="text-sm font-medium">Patient Profiles</span>
-        <span class="bg-blue-100 text-blue-800 text-xs font-semibold ml-2 px-3 py-0.5 rounded-full">
-            <?= count($allPatientInfo) ?>
-        </span>
-    </button>
-
-    <button class="nav-pill flex items-center mr-3 mb-2 px-4 py-2 rounded-full transition-all" data-tab="medical">
-        <i class="fas fa-heartbeat mr-2 text-sm"></i> 
-        <span class="text-sm font-medium">Medical Info</span>
-    </button>
-</div>
-
-        <!-- Health Records Tab (Consultation Notes) -->
-        <div id="records" class="tab-content active">
-            <?php if (empty($allPatientInfo)): ?>
-                <div class="no-records-message">
-                    <i class="fas fa-user-times text-5xl text-gray-300 mb-4"></i>
-                    <h3 class="text-xl font-semibold text-gray-600 mb-2">No Patient Records Linked</h3>
-                    <p class="text-gray-500 max-w-md mx-auto mb-6">Your account is not linked to any patient records yet.</p>
+        <!-- Main Content Tabs -->
+        <div class="bg-white rounded-lg shadow mb-8">
+            <!-- Tab Headers -->
+            <div class="border-b">
+                <div class="flex overflow-x-auto">
+                    <button class="tab-header active px-6 py-4 font-bold text-blue-600 border-b-2 border-blue-600" data-tab="consultations">
+                        <i class="fas fa-calendar-check icon-base mr-2"></i> Consultations
+                    </button>
+                    <button class="tab-header px-6 py-4 font-bold text-gray-600 hover:text-gray-900" data-tab="patients">
+                        <i class="fas fa-user-injured icon-base mr-2"></i> Patients
+                    </button>
+                    <button class="tab-header px-6 py-4 font-bold text-gray-600 hover:text-gray-900" data-tab="medical">
+                        <i class="fas fa-heart icon-base mr-2"></i> Medical Info
+                    </button>
                 </div>
-            <?php elseif (empty($allConsultationNotes)): ?>
-                <div class="space-y-6">
-                    <?php foreach ($allPatientInfo as $patientIndex => $patient): ?>
-                        <div class="patient-section">
-                            <div class="patient-header">
-                                <div class="flex flex-col md:flex-row md:items-center justify-between">
-                                    <div class="flex items-center mb-4 md:mb-0">
-                                        <div class="w-12 h-12 bg-white rounded-2xl flex items-center justify-center mr-4 border-2 border-blue-200">
-                                            <i class="fas fa-user text-blue-500"></i>
-                                        </div>
-                                        <div>
-                                            <h3 class="font-semibold text-lg text-gray-800"><?= htmlspecialchars($patient['full_name']) ?></h3>
-                                            <div class="flex items-center mt-1 space-x-3">
-                                                <?php if (!empty($patient['age'])): ?>
-                                                    <span class="text-sm text-gray-600">Age: <?= htmlspecialchars($patient['age']) ?></span>
-                                                <?php endif; ?>
-                                                <?php if (!empty($patient['patient_gender'])): ?>
-                                                    <span class="text-sm text-gray-600">Gender: <?= htmlspecialchars($patient['patient_gender']) ?></span>
-                                                <?php endif; ?>
-                                                <span class="patient-badge">No consultations yet</span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div class="text-sm text-gray-500">
-                                        <i class="fas fa-calendar mr-1"></i>
-                                        Last checkup: <?= !empty($patient['last_checkup']) ? date('M d, Y', strtotime($patient['last_checkup'])) : 'Never' ?>
-                                    </div>
-                                </div>
+            </div>
+
+            <!-- Tab Content -->
+            <div class="p-6">
+                <!-- Consultations Tab -->
+                <div id="consultations" class="tab-content active">
+                    <?php if (empty($allPatientInfo)): ?>
+                        <div class="text-center py-12">
+                            <div class="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-4">
+                                <i class="fas fa-user-md text-gray-400 icon-3xl"></i>
                             </div>
-                            <div class="p-6">
-                                <div class="text-center py-8">
-                                    <i class="fas fa-file-medical-alt text-4xl text-gray-300 mb-4"></i>
-                                    <h4 class="text-lg font-medium text-gray-600 mb-2">No Consultation Records</h4>
-                                    <p class="text-gray-500">No consultation notes found for <?= htmlspecialchars($patient['full_name']) ?>.</p>
-                                </div>
-                            </div>
+                            <h3 class="text-lg font-bold text-gray-900 mb-2">No Patients Linked</h3>
+                            <p class="text-gray-500 mb-6">Your account is not linked to any patient records.</p>
+                            <button class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-bold" onclick="alert('Please contact the health center to link your account.')">
+                                Contact Health Center
+                            </button>
                         </div>
-                    <?php endforeach; ?>
-                </div>
-            <?php else: ?>
-                <div class="space-y-6">
-                    <?php foreach ($consultationNotesByPatient as $patientId => $patientData): 
-                        $patient = $patientData['patient_info'];
-                        $patientNotes = $patientData['notes'];
-                    ?>
-                        <div class="patient-section">
-                            <div class="patient-header">
-                                <div class="flex flex-col md:flex-row md:items-center justify-between">
-                                    <div class="flex items-center mb-4 md:mb-0">
-                                        <div class="w-12 h-12 bg-white rounded-2xl flex items-center justify-center mr-4 border-2 border-blue-200">
-                                            <i class="fas fa-user text-blue-500"></i>
-                                        </div>
-                                        <div>
-                                            <h3 class="font-semibold text-lg text-gray-800"><?= htmlspecialchars($patient['full_name']) ?></h3>
-                                            <div class="flex items-center mt-1 space-x-3">
-                                                <?php if (!empty($patient['age'])): ?>
-                                                    <span class="text-sm text-gray-600">Age: <?= htmlspecialchars($patient['age']) ?></span>
-                                                <?php endif; ?>
-                                                <?php if (!empty($patient['patient_gender'])): ?>
-                                                    <span class="text-sm text-gray-600">Gender: <?= htmlspecialchars($patient['patient_gender']) ?></span>
-                                                <?php endif; ?>
-                                                <span class="patient-badge">
-                                                    <?= count($patientNotes) ?> consultation<?= count($patientNotes) !== 1 ? 's' : '' ?>
-                                                </span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div class="text-sm text-gray-500">
-                                        <i class="fas fa-calendar mr-1"></i>
-                                        Last consultation: <?= !empty($patientNotes[0]['consultation_date']) ? date('M d, Y', strtotime($patientNotes[0]['consultation_date'])) : 'No consultations' ?>
-                                    </div>
-                                </div>
+                    <?php elseif (empty($allConsultationNotes)): ?>
+                        <div class="text-center py-12">
+                            <div class="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-4">
+                                <i class="fas fa-file-medical-alt text-gray-400 icon-3xl"></i>
                             </div>
-                            <div class="p-6">
-                                <div class="space-y-4">
-                                    <?php foreach ($patientNotes as $note): ?>
-                                        <div class="consultation-note-item p-6">
-                                            <div class="flex flex-col md:flex-row md:items-center justify-between mb-4">
-                                                <div class="flex items-center mb-4 md:mb-0">
-                                                    <div class="w-10 h-10 bg-blue-100 rounded-2xl flex items-center justify-center mr-4">
-                                                        <i class="fas fa-calendar-check text-blue-500"></i>
-                                                    </div>
+                            <h3 class="text-lg font-bold text-gray-900 mb-2">No Consultations Yet</h3>
+                            <p class="text-gray-500">Visit the health center for your first consultation.</p>
+                        </div>
+                    <?php else: ?>
+                        <div class="space-y-4">
+                            <?php 
+                            // Group consultations by patient
+                            $consultationsByPatient = [];
+                            foreach ($allConsultationNotes as $note) {
+                                $patientId = $note['patient_id'];
+                                if (!isset($consultationsByPatient[$patientId])) {
+                                    // Find patient name
+                                    $patientName = 'Unknown';
+                                    foreach ($allPatientInfo as $patient) {
+                                        if ($patient['id'] == $patientId) {
+                                            $patientName = $patient['full_name'];
+                                            break;
+                                        }
+                                    }
+                                    $consultationsByPatient[$patientId] = [
+                                        'patient_name' => $patientName,
+                                        'notes' => []
+                                    ];
+                                }
+                                $consultationsByPatient[$patientId]['notes'][] = $note;
+                            }
+                            
+                            foreach ($consultationsByPatient as $patientData):
+                            ?>
+                                <div class="border rounded-lg overflow-hidden hover:shadow-md transition-shadow">
+                                    <div class="bg-gray-50 px-4 py-3 border-b">
+                                        <div class="flex justify-between items-center">
+                                            <h3 class="font-bold text-gray-900"><?php echo htmlspecialchars($patientData['patient_name']); ?></h3>
+                                            <span class="text-sm bg-blue-100 text-blue-800 px-2 py-1 rounded font-bold">
+                                                <?php echo count($patientData['notes']); ?> consultation<?php echo count($patientData['notes']) !== 1 ? 's' : ''; ?>
+                                            </span>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="divide-y">
+                                        <?php foreach ($patientData['notes'] as $note): ?>
+                                            <div class="p-4 hover:bg-gray-50">
+                                                <div class="flex justify-between items-start mb-2">
                                                     <div>
-                                                        <h3 class="font-semibold text-gray-800">Consultation on <?= date('M d, Y', strtotime($note['consultation_date'] ?? 'now')) ?></h3>
-                                                        <p class="text-gray-500 text-sm">
-                                                            <?php if (!empty($note['doctor_name'])): ?>
-                                                                With Dr. <?= htmlspecialchars($note['doctor_name']) ?>
-                                                            <?php else: ?>
-                                                                Consultation with healthcare staff
-                                                            <?php endif; ?>
+                                                        <p class="font-bold text-gray-900">
+                                                            <?php echo date('F j, Y', strtotime($note['consultation_date'] ?? 'now')); ?>
                                                         </p>
+                                                        <?php if (!empty($note['doctor_name'])): ?>
+                                                            <p class="text-sm text-gray-600 font-medium">
+                                                                <i class="fas fa-user-md icon-sm mr-1"></i> <?php echo htmlspecialchars($note['doctor_name']); ?>
+                                                            </p>
+                                                        <?php endif; ?>
                                                     </div>
-                                                </div>
-                                                <div class="flex space-x-2">
-                                                    <button onclick="viewConsultationNote(<?= htmlspecialchars(json_encode($note)) ?>)" 
-                                                            class="btn-primary flex items-center px-4 py-2 rounded-full text-sm">
-                                                        <i class="fas fa-eye mr-2"></i> View
-                                                    </button>
-                                                    <button onclick="printConsultationNote(<?= htmlspecialchars(json_encode($note)) ?>)" 
-                                                            class="btn-primary flex items-center px-4 py-2 rounded-full text-sm">
-                                                        <i class="fas fa-print mr-2"></i> Print
+                                                    <button onclick="viewConsultationNote(<?php echo htmlspecialchars(json_encode($note)); ?>)" 
+                                                            class="text-sm text-blue-600 hover:text-blue-800 font-bold">
+                                                        <i class="fas fa-eye icon-sm mr-1"></i> View Details
                                                     </button>
                                                 </div>
-                                            </div>
-                                            
-                                            <div class="bg-gray-50 p-4 rounded-lg">
-                                                <h4 class="font-semibold text-gray-700 mb-2 text-sm">Consultation Notes</h4>
-                                                <p class="text-gray-700 text-sm">
-                                                    <?= !empty($note['note']) 
-                                                        ? (strlen($note['note']) > 200 
-                                                            ? htmlspecialchars(substr($note['note'], 0, 200)) . '...' 
-                                                            : htmlspecialchars($note['note'])) 
-                                                        : 'No notes recorded' ?>
+                                                
+                                                <p class="text-gray-700 text-sm mb-2">
+                                                    <?php 
+                                                    if (!empty($note['note'])) {
+                                                        if (strlen($note['note']) > 120) {
+                                                            echo htmlspecialchars(substr($note['note'], 0, 120)) . '...';
+                                                        } else {
+                                                            echo htmlspecialchars($note['note']);
+                                                        }
+                                                    } else {
+                                                        echo 'No detailed notes recorded.';
+                                                    }
+                                                    ?>
                                                 </p>
                                                 
                                                 <?php if (!empty($note['next_consultation_date'])): ?>
-                                                <div class="mt-3 pt-3 border-t border-gray-200">
-                                                    <p class="text-sm text-green-600">
-                                                        <i class="fas fa-calendar-alt mr-2"></i>
-                                                        Next appointment: <?= date('M d, Y', strtotime($note['next_consultation_date'])) ?>
-                                                    </p>
-                                                </div>
+                                                    <div class="mt-2 pt-2 border-t border-gray-100">
+                                                        <p class="text-sm text-green-600 font-bold">
+                                                            <i class="fas fa-calendar-alt icon-sm mr-1"></i>
+                                                            Next appointment: <?php echo date('M j, Y', strtotime($note['next_consultation_date'])); ?>
+                                                        </p>
+                                                    </div>
                                                 <?php endif; ?>
                                             </div>
-                                        </div>
-                                    <?php endforeach; ?>
-                                </div>
-                            </div>
-                        </div>
-                    <?php endforeach; ?>
-                </div>
-
-                <!-- Summary Section -->
-                <div class="mt-8 grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <div class="bg-gradient-to-br from-blue-50 to-blue-100 p-6 rounded-2xl border border-blue-200">
-                        <p class="text-blue-600 font-semibold text-sm">Linked Patients</p>
-                        <p class="text-3xl font-bold text-blue-800 mt-2"><?= count($allPatientInfo) ?></p>
-                    </div>
-                    <div class="bg-gradient-to-br from-green-50 to-green-100 p-6 rounded-2xl border border-green-200">
-                        <p class="text-green-600 font-semibold text-sm">Total Consultations</p>
-                        <p class="text-3xl font-bold text-green-800 mt-2"><?= $totalConsultationNotes ?></p>
-                    </div>
-                    <div class="bg-gradient-to-br from-purple-50 to-purple-100 p-6 rounded-2xl border border-purple-200">
-                        <p class="text-purple-600 font-semibold text-sm">Account Status</p>
-                        <p class="text-lg font-bold text-purple-800 mt-2">Active</p>
-                    </div>
-                </div>
-            <?php endif; ?>
-        </div>
-
-        <!-- Patient Profiles Tab -->
-        <div id="patients" class="tab-content">
-            <?php if (empty($allPatientInfo)): ?>
-                <div class="no-records-message">
-                    <i class="fas fa-user-times text-5xl text-gray-300 mb-4"></i>
-                    <h3 class="text-xl font-semibold text-gray-600 mb-2">No Patient Profiles</h3>
-                    <p class="text-gray-500 max-w-md mx-auto">Your account is not linked to any patient records.</p>
-                </div>
-            <?php else: ?>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <?php foreach ($allPatientInfo as $patientIndex => $patient): 
-                        // Count consultation notes for this patient
-                        $patientNoteCount = 0;
-                        foreach ($allConsultationNotes as $note) {
-                            if ($note['patient_id'] == $patient['id']) {
-                                $patientNoteCount++;
-                            }
-                        }
-                    ?>
-                        <div class="info-card p-6">
-                            <!-- Patient Header -->
-                            <div class="flex items-start mb-6">
-                                <div class="w-16 h-16 bg-blue-100 rounded-2xl flex items-center justify-center mr-4">
-                                    <i class="fas fa-user text-blue-500 text-xl"></i>
-                                </div>
-                                <div class="flex-1">
-                                    <h3 class="text-xl font-semibold text-gray-800"><?= htmlspecialchars($patient['full_name']) ?></h3>
-                                    <div class="flex flex-wrap items-center mt-2 gap-2">
-                                        <?php if (!empty($patient['age'])): ?>
-                                            <span class="text-sm text-gray-600">Age: <?= htmlspecialchars($patient['age']) ?></span>
-                                        <?php endif; ?>
-                                        <?php if (!empty($patient['patient_gender'])): ?>
-                                            <span class="text-sm text-gray-600">Gender: <?= htmlspecialchars($patient['patient_gender']) ?></span>
-                                        <?php endif; ?>
-                                        <span class="patient-badge">
-                                            <?= $patientNoteCount ?> consultation<?= $patientNoteCount !== 1 ? 's' : '' ?>
-                                        </span>
+                                        <?php endforeach; ?>
                                     </div>
                                 </div>
-                            </div>
+                            <?php endforeach; ?>
+                        </div>
+                    <?php endif; ?>
+                </div>
 
-                            <!-- Health Badges -->
-                            <div class="mb-6">
-                                <?php if (!empty($patient['phic_no'])): ?>
-                                    <span class="health-badge badge-phic">
-                                        <i class="fas fa-id-card mr-1"></i> PHIC: <?= htmlspecialchars($patient['phic_no']) ?>
-                                    </span>
-                                <?php endif; ?>
-                                
-                                <?php if (!empty($patient['fourps_member']) && $patient['fourps_member'] == 'Yes'): ?>
-                                    <span class="health-badge badge-4ps">
-                                        <i class="fas fa-users mr-1"></i> 4P's Member
-                                    </span>
-                                <?php endif; ?>
-                                
-                                <?php if (!empty($patient['bhw_assigned'])): ?>
-                                    <span class="health-badge badge-bhw">
-                                        <i class="fas fa-user-nurse mr-1"></i> BHW: <?= htmlspecialchars($patient['bhw_assigned']) ?>
-                                    </span>
-                                <?php endif; ?>
-                                
-                                <?php if (!empty($patient['family_no'])): ?>
-                                    <span class="health-badge badge-family">
-                                        <i class="fas fa-home mr-1"></i> Family: <?= htmlspecialchars($patient['family_no']) ?>
-                                    </span>
-                                <?php endif; ?>
+                <!-- Patients Tab -->
+                <div id="patients" class="tab-content hidden">
+                    <?php if (empty($allPatientInfo)): ?>
+                        <div class="text-center py-12">
+                            <div class="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-4">
+                                <i class="fas fa-user-times text-gray-400 icon-3xl"></i>
                             </div>
-
-                            <!-- Patient Details -->
-                            <div class="space-y-4">
-                                <!-- Contact Information -->
-                                <div class="border-t border-gray-100 pt-4">
-                                    <h4 class="font-semibold text-gray-700 mb-3 text-sm">Contact Information</h4>
-                                    <div class="space-y-2">
-                                        <?php if (!empty($patient['sitio'])): ?>
-                                            <div class="flex items-center text-sm">
-                                                <i class="fas fa-map-marker-alt text-gray-400 mr-3 w-5"></i>
-                                                <span class="text-gray-600"><?= htmlspecialchars($patient['sitio']) ?></span>
+                            <h3 class="text-lg font-bold text-gray-900 mb-2">No Patient Profiles</h3>
+                            <p class="text-gray-500">Contact the health center to link patient records.</p>
+                        </div>
+                    <?php else: ?>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <?php foreach ($allPatientInfo as $patient): 
+                                // Count consultations for this patient
+                                $patientNoteCount = 0;
+                                foreach ($allConsultationNotes as $note) {
+                                    if ($note['patient_id'] == $patient['id']) {
+                                        $patientNoteCount++;
+                                    }
+                                }
+                            ?>
+                                <div class="border rounded-lg p-5 hover:shadow-md transition-shadow">
+                                    <div class="flex justify-between items-start mb-4">
+                                        <div class="flex items-center">
+                                            <div class="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center mr-3">
+                                                <i class="fas fa-user text-blue-600 icon-lg"></i>
                                             </div>
-                                        <?php endif; ?>
-                                        
-                                        <?php if (!empty($patient['address'])): ?>
-                                            <div class="flex items-center text-sm">
-                                                <i class="fas fa-home text-gray-400 mr-3 w-5"></i>
-                                                <span class="text-gray-600"><?= htmlspecialchars($patient['address']) ?></span>
+                                            <div>
+                                                <h3 class="font-bold text-gray-900 text-lg"><?php echo htmlspecialchars($patient['full_name']); ?></h3>
+                                                <div class="flex items-center space-x-2 mt-1">
+                                                    <?php if (!empty($patient['age'])): ?>
+                                                        <span class="text-sm text-gray-600 font-medium">Age: <?php echo htmlspecialchars($patient['age']); ?></span>
+                                                    <?php endif; ?>
+                                                    <?php if (!empty($patient['gender'])): ?>
+                                                        <span class="text-sm text-gray-600 font-medium">• <?php echo htmlspecialchars($patient['gender']); ?></span>
+                                                    <?php endif; ?>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <span class="text-xs bg-gray-100 text-gray-800 px-2 py-1 rounded font-bold">
+                                            <?php echo $patientNoteCount; ?> consult<?php echo $patientNoteCount !== 1 ? 's' : ''; ?>
+                                        </span>
+                                    </div>
+                                    
+                                    <div class="space-y-3 mb-4">
+                                        <?php if (!empty($patient['sitio'])): ?>
+                                            <div class="flex items-center text-sm text-gray-600">
+                                                <i class="fas fa-map-marker-alt icon-sm mr-2 text-gray-400"></i>
+                                                <span class="font-medium"><?php echo htmlspecialchars($patient['sitio']); ?></span>
                                             </div>
                                         <?php endif; ?>
                                         
                                         <?php if (!empty($patient['contact'])): ?>
-                                            <div class="flex items-center text-sm">
-                                                <i class="fas fa-phone text-gray-400 mr-3 w-5"></i>
-                                                <span class="text-gray-600"><?= htmlspecialchars($patient['contact']) ?></span>
-                                            </div>
-                                        <?php endif; ?>
-                                    </div>
-                                </div>
-
-                                <!-- Personal Information -->
-                                <div class="border-t border-gray-100 pt-4">
-                                    <h4 class="font-semibold text-gray-700 mb-3 text-sm">Personal Information</h4>
-                                    <div class="grid grid-cols-2 gap-4">
-                                        <?php if (!empty($patient['date_of_birth'])): ?>
-                                            <div>
-                                                <p class="text-gray-500 text-xs mb-1">Date of Birth</p>
-                                                <p class="text-gray-800 text-sm"><?= date('M d, Y', strtotime($patient['date_of_birth'])) ?></p>
+                                            <div class="flex items-center text-sm text-gray-600">
+                                                <i class="fas fa-phone icon-sm mr-2 text-gray-400"></i>
+                                                <span class="font-medium"><?php echo htmlspecialchars($patient['contact']); ?></span>
                                             </div>
                                         <?php endif; ?>
                                         
-                                        <?php if (!empty($patient['civil_status'])): ?>
-                                            <div>
-                                                <p class="text-gray-500 text-xs mb-1">Civil Status</p>
-                                                <p class="text-gray-800 text-sm"><?= htmlspecialchars($patient['civil_status']) ?></p>
-                                            </div>
-                                        <?php endif; ?>
-                                        
-                                        <?php if (!empty($patient['occupation'])): ?>
-                                            <div class="col-span-2">
-                                                <p class="text-gray-500 text-xs mb-1">Occupation</p>
-                                                <p class="text-gray-800 text-sm"><?= htmlspecialchars($patient['occupation']) ?></p>
-                                            </div>
-                                        <?php endif; ?>
-                                    </div>
-                                </div>
-
-                                <!-- Health Information -->
-                                <div class="border-t border-gray-100 pt-4">
-                                    <h4 class="font-semibold text-gray-700 mb-3 text-sm">Health Information</h4>
-                                    <div class="grid grid-cols-2 gap-4">
                                         <?php if (!empty($patient['disease'])): ?>
-                                            <div class="col-span-2">
-                                                <p class="text-gray-500 text-xs mb-1">Disease/Condition</p>
-                                                <p class="text-gray-800 text-sm"><?= htmlspecialchars($patient['disease']) ?></p>
+                                            <div class="text-sm text-gray-600">
+                                                <i class="fas fa-stethoscope icon-sm mr-2 text-gray-400"></i>
+                                                <span class="font-medium"><?php echo htmlspecialchars($patient['disease']); ?></span>
                                             </div>
+                                        <?php endif; ?>
+                                    </div>
+                                    
+                                    <div class="flex flex-wrap gap-2">
+                                        <?php if (!empty($patient['phic_no'])): ?>
+                                            <span class="text-xs bg-green-100 text-green-800 px-2 py-1 rounded font-bold">
+                                                <i class="fas fa-id-card icon-xs mr-1"></i> PHIC Member
+                                            </span>
+                                        <?php endif; ?>
+                                        
+                                        <?php if (!empty($patient['fourps_member']) && $patient['fourps_member'] == 'Yes'): ?>
+                                            <span class="text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded font-bold">
+                                                <i class="fas fa-users icon-xs mr-1"></i> 4P's Member
+                                            </span>
                                         <?php endif; ?>
                                         
                                         <?php if (!empty($patient['last_checkup'])): ?>
-                                            <div class="col-span-2">
-                                                <p class="text-gray-500 text-xs mb-1">Last Check-up</p>
-                                                <p class="text-gray-800 text-sm"><?= date('M d, Y', strtotime($patient['last_checkup'])) ?></p>
-                                            </div>
-                                        <?php endif; ?>
-                                        
-                                        <?php if (!empty($patient['consultation_type'])): ?>
-                                            <div>
-                                                <p class="text-gray-500 text-xs mb-1">Consultation Type</p>
-                                                <p class="text-gray-800 text-sm"><?= htmlspecialchars(ucfirst($patient['consultation_type'])) ?></p>
-                                            </div>
-                                        <?php endif; ?>
-                                    </div>
-                                </div>
-
-                                <!-- Record Status -->
-                                <div class="border-t border-gray-100 pt-4">
-                                    <div class="flex justify-between items-center">
-                                        <div>
-                                            <p class="text-gray-500 text-xs mb-1">Record Status</p>
-                                            <p class="text-green-600 text-sm font-medium">
-                                                <?= empty($patient['deleted_at']) ? 'Active' : 'Archived' ?>
-                                            </p>
-                                        </div>
-                                        <div class="text-right">
-                                            <p class="text-gray-500 text-xs mb-1">Linked Since</p>
-                                            <p class="text-gray-800 text-sm"><?= date('M d, Y', strtotime($patient['created_at'])) ?></p>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    <?php endforeach; ?>
-                </div>
-            <?php endif; ?>
-        </div>
-
-        <!-- Medical Information Tab -->
-        <div id="medical" class="tab-content">
-            <?php if (empty($allPatientInfo)): ?>
-                <div class="no-records-message">
-                    <i class="fas fa-user-times text-5xl text-gray-300 mb-4"></i>
-                    <h3 class="text-xl font-semibold text-gray-600 mb-2">No Medical Information</h3>
-                    <p class="text-gray-500 max-w-md mx-auto">No patient records linked to view medical information.</p>
-                </div>
-            <?php else: ?>
-                <div class="space-y-6">
-                    <?php foreach ($allPatientInfo as $patientIndex => $patient): 
-                        // Skip if no medical info
-                        if (empty($patient['height']) && empty($patient['weight']) && empty($patient['blood_type']) 
-                            && empty($patient['allergies']) && empty($patient['current_medications'])) {
-                            continue;
-                        }
-                    ?>
-                        <div class="info-card p-6">
-                            <!-- Patient Header -->
-                            <div class="flex items-center mb-6">
-                                <div class="w-10 h-10 bg-blue-100 rounded-2xl flex items-center justify-center mr-4">
-                                    <i class="fas fa-user text-blue-500"></i>
-                                </div>
-                                <div>
-                                    <h3 class="text-xl font-semibold text-gray-800"><?= htmlspecialchars($patient['full_name']) ?></h3>
-                                    <div class="flex items-center mt-1 space-x-3">
-                                        <?php if (!empty($patient['age'])): ?>
-                                            <span class="text-sm text-gray-600">Age: <?= htmlspecialchars($patient['age']) ?></span>
-                                        <?php endif; ?>
-                                        <?php if (!empty($patient['patient_gender'])): ?>
-                                            <span class="text-sm text-gray-600">Gender: <?= htmlspecialchars($patient['patient_gender']) ?></span>
-                                        <?php endif; ?>
-                                    </div>
-                                </div>
-                            </div>
-                            
-                            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                                <!-- Vital Statistics -->
-                                <div>
-                                    <h4 class="font-semibold text-gray-700 mb-4 text-lg">Vital Statistics</h4>
-                                    
-                                    <div class="space-y-4">
-                                        <?php if (!empty($patient['blood_type'])): ?>
-                                        <div class="flex justify-between items-center py-3 border-b border-gray-100">
-                                            <span class="text-gray-600">Blood Type</span>
-                                            <span class="font-medium text-gray-800"><?= htmlspecialchars($patient['blood_type']) ?></span>
-                                        </div>
-                                        <?php endif; ?>
-                                        
-                                        <?php if (!empty($patient['height'])): ?>
-                                        <div class="flex justify-between items-center py-3 border-b border-gray-100">
-                                            <span class="text-gray-600">Height</span>
-                                            <span class="font-medium text-gray-800"><?= htmlspecialchars($patient['height']) ?> cm</span>
-                                        </div>
-                                        <?php endif; ?>
-                                        
-                                        <?php if (!empty($patient['weight'])): ?>
-                                        <div class="flex justify-between items-center py-3 border-b border-gray-100">
-                                            <span class="text-gray-600">Weight</span>
-                                            <span class="font-medium text-gray-800"><?= htmlspecialchars($patient['weight']) ?> kg</span>
-                                        </div>
-                                        <?php endif; ?>
-                                        
-                                        <?php if (!empty($patient['height']) && !empty($patient['weight'])): ?>
-                                        <div class="flex justify-between items-center py-3 border-b border-gray-100">
-                                            <span class="text-gray-600">BMI</span>
-                                            <span class="font-medium text-gray-800">
-                                                <?php 
-                                                    $height = $patient['height'] / 100;
-                                                    $weight = $patient['weight'];
-                                                    $bmi = $weight / ($height * $height);
-                                                    echo number_format($bmi, 1);
-                                                ?>
-                                                <span class="text-sm text-gray-500 ml-2">
-                                                    (<?= $bmi < 18.5 ? 'Underweight' : ($bmi < 25 ? 'Normal' : ($bmi < 30 ? 'Overweight' : 'Obese')) ?>)
-                                                </span>
+                                            <span class="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded font-bold">
+                                                <i class="fas fa-calendar icon-xs mr-1"></i> Last: <?php echo date('M j, Y', strtotime($patient['last_checkup'])); ?>
                                             </span>
-                                        </div>
-                                        <?php endif; ?>
-                                        
-                                        <?php if (!empty($patient['temperature'])): ?>
-                                        <div class="flex justify-between items-center py-3 border-b border-gray-100">
-                                            <span class="text-gray-600">Temperature</span>
-                                            <span class="font-medium text-gray-800"><?= htmlspecialchars($patient['temperature']) ?> °C</span>
-                                        </div>
-                                        <?php endif; ?>
-                                        
-                                        <?php if (!empty($patient['blood_pressure'])): ?>
-                                        <div class="flex justify-between items-center py-3 border-b border-gray-100">
-                                            <span class="text-gray-600">Blood Pressure</span>
-                                            <span class="font-medium text-gray-800"><?= htmlspecialchars($patient['blood_pressure']) ?></span>
-                                        </div>
                                         <?php endif; ?>
                                     </div>
                                 </div>
-                                
-                                <!-- Medical Details -->
-                                <div>
-                                    <h4 class="font-semibold text-gray-700 mb-4 text-lg">Medical Details</h4>
-                                    
-                                    <div class="space-y-4">
-                                        <?php if (!empty($patient['allergies'])): ?>
-                                        <div>
-                                            <p class="text-gray-600 text-sm font-medium mb-1">Allergies</p>
-                                            <p class="text-gray-800 bg-red-50 p-3 rounded-lg text-sm"><?= nl2br(htmlspecialchars($patient['allergies'])) ?></p>
-                                        </div>
-                                        <?php endif; ?>
-                                        
-                                        <?php if (!empty($patient['current_medications'])): ?>
-                                        <div>
-                                            <p class="text-gray-600 text-sm font-medium mb-1">Current Medications</p>
-                                            <p class="text-gray-800 bg-yellow-50 p-3 rounded-lg text-sm"><?= nl2br(htmlspecialchars($patient['current_medications'])) ?></p>
-                                        </div>
-                                        <?php endif; ?>
-                                        
-                                        <?php if (!empty($patient['chronic_conditions'])): ?>
-                                        <div>
-                                            <p class="text-gray-600 text-sm font-medium mb-1">Chronic Conditions</p>
-                                            <p class="text-gray-800 bg-purple-50 p-3 rounded-lg text-sm"><?= nl2br(htmlspecialchars($patient['chronic_conditions'])) ?></p>
-                                        </div>
-                                        <?php endif; ?>
-                                        
-                                        <?php if (!empty($patient['immunization_record'])): ?>
-                                        <div>
-                                            <p class="text-gray-600 text-sm font-medium mb-1">Immunization Record</p>
-                                            <p class="text-gray-800 bg-green-50 p-3 rounded-lg text-sm"><?= nl2br(htmlspecialchars($patient['immunization_record'])) ?></p>
-                                        </div>
-                                        <?php endif; ?>
-                                    </div>
-                                </div>
-                                
-                                <!-- Medical History (Full Width) -->
-                                <div class="lg:col-span-2">
-                                    <?php if (!empty($patient['patient_medical_history']) || !empty($patient['existing_medical_history'])): ?>
-                                    <div class="mb-6">
-                                        <h4 class="font-semibold text-gray-700 mb-2 text-lg">Medical History</h4>
-                                        <p class="text-gray-800 bg-blue-50 p-4 rounded-lg">
-                                            <?= nl2br(htmlspecialchars($patient['patient_medical_history'] ?? $patient['existing_medical_history'] ?? '')) ?>
-                                        </p>
-                                    </div>
-                                    <?php endif; ?>
-                                    
-                                    <?php if (!empty($patient['family_history'])): ?>
-                                    <div>
-                                        <h4 class="font-semibold text-gray-700 mb-2 text-lg">Family Medical History</h4>
-                                        <p class="text-gray-800 bg-green-50 p-4 rounded-lg"><?= nl2br(htmlspecialchars($patient['family_history'])) ?></p>
-                                    </div>
-                                    <?php endif; ?>
-                                </div>
-                            </div>
+                            <?php endforeach; ?>
                         </div>
-                    <?php endforeach; ?>
-                    
-                    <?php 
-                    // Check if any patient had medical info
-                    $hasMedicalInfo = false;
-                    foreach ($allPatientInfo as $patient) {
-                        if (!empty($patient['height']) || !empty($patient['weight']) || !empty($patient['blood_type']) 
-                            || !empty($patient['allergies']) || !empty($patient['current_medications'])) {
-                            $hasMedicalInfo = true;
-                            break;
-                        }
-                    }
-                    
-                    if (!$hasMedicalInfo): ?>
-                    <div class="no-records-message">
-                        <i class="fas fa-heartbeat text-5xl text-gray-300 mb-4"></i>
-                        <h3 class="text-xl font-semibold text-gray-600 mb-2">No Medical Information</h3>
-                        <p class="text-gray-500 max-w-md mx-auto">No detailed medical information recorded for linked patients.</p>
-                    </div>
                     <?php endif; ?>
                 </div>
-            <?php endif; ?>
-        </div>
-    </div>
 
-    <!-- Modal for viewing consultation notes -->
-    <div id="consultationModal" class="modal-overlay">
-        <div class="modal-content">
-            <button class="close-modal" onclick="closeModal()">&times;</button>
-            <div id="modalContent"></div>
-            <div class="mt-6 flex justify-end space-x-3">
-                <button onclick="printCurrentConsultationNote()" class="btn-primary flex items-center px-4 py-2 rounded-full">
-                    <i class="fas fa-print mr-2"></i> Print
-                </button>
-                <button onclick="closeModal()" class="bg-gray-200 text-gray-700 flex items-center px-4 py-2 rounded-full hover:bg-gray-300">
-                    <i class="fas fa-times mr-2"></i> Close
-                </button>
+                <!-- Medical Info Tab -->
+                <div id="medical" class="tab-content hidden">
+                    <?php if (empty($allPatientInfo)): ?>
+                        <div class="text-center py-12">
+                            <div class="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-4">
+                                <i class="fas fa-heartbeat text-gray-400 icon-3xl"></i>
+                            </div>
+                            <h3 class="text-lg font-bold text-gray-900 mb-2">No Medical Information</h3>
+                            <p class="text-gray-500">No patient records linked.</p>
+                        </div>
+                    <?php else: 
+                        $anyPatientHasMedicalInfo = false;
+                        foreach ($allPatientInfo as $patient) {
+                            if (!empty($patient['blood_type']) || !empty($patient['height']) || 
+                                !empty($patient['weight']) || !empty($patient['allergies']) || 
+                                !empty($patient['current_medications'])) {
+                                $anyPatientHasMedicalInfo = true;
+                                break;
+                            }
+                        }
+                        
+                        if (!$anyPatientHasMedicalInfo): ?>
+                        <div class="text-center py-12">
+                            <div class="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-4">
+                                <i class="fas fa-heartbeat text-gray-400 icon-3xl"></i>
+                            </div>
+                            <h3 class="text-lg font-bold text-gray-900 mb-2">No Medical Information</h3>
+                            <p class="text-gray-500">Medical information will be available after your first consultation.</p>
+                        </div>
+                        <?php else: ?>
+                        <div class="space-y-6">
+                            <?php foreach ($allPatientInfo as $patient): 
+                                // Check if patient has any medical info
+                                $hasMedicalInfo = !empty($patient['blood_type']) || !empty($patient['height']) || 
+                                                 !empty($patient['weight']) || !empty($patient['allergies']) || 
+                                                 !empty($patient['current_medications']);
+                                
+                                if (!$hasMedicalInfo) continue;
+                            ?>
+                                <div class="border rounded-lg p-5 hover:shadow-md transition-shadow">
+                                    <h3 class="font-bold text-gray-900 text-lg mb-4"><?php echo htmlspecialchars($patient['full_name']); ?></h3>
+                                    
+                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                        <!-- Vital Signs -->
+                                        <div>
+                                            <h4 class="font-bold text-gray-700 mb-3 text-sm">Vital Signs</h4>
+                                            <div class="space-y-3">
+                                                <?php if (!empty($patient['blood_type'])): ?>
+                                                    <div class="flex justify-between items-center py-2 border-b">
+                                                        <span class="text-gray-600 font-medium">
+                                                            <i class="fas fa-tint icon-sm mr-2 text-red-400"></i>Blood Type
+                                                        </span>
+                                                        <span class="font-bold"><?php echo htmlspecialchars($patient['blood_type']); ?></span>
+                                                    </div>
+                                                <?php endif; ?>
+                                                
+                                                <?php if (!empty($patient['height']) && !empty($patient['weight'])): ?>
+                                                    <div class="grid grid-cols-2 gap-4">
+                                                        <div>
+                                                            <p class="text-sm text-gray-500 mb-1 font-medium">
+                                                                <i class="fas fa-ruler-vertical icon-sm mr-1"></i> Height
+                                                            </p>
+                                                            <p class="font-bold"><?php echo htmlspecialchars($patient['height']); ?> cm</p>
+                                                        </div>
+                                                        <div>
+                                                            <p class="text-sm text-gray-500 mb-1 font-medium">
+                                                                <i class="fas fa-weight icon-sm mr-1"></i> Weight
+                                                            </p>
+                                                            <p class="font-bold"><?php echo htmlspecialchars($patient['weight']); ?> kg</p>
+                                                        </div>
+                                                    </div>
+                                                    
+                                                    <?php 
+                                                    $height = !empty($patient['height']) ? $patient['height'] / 100 : 0;
+                                                    $weight = !empty($patient['weight']) ? $patient['weight'] : 0;
+                                                    $bmi = $height > 0 ? $weight / ($height * $height) : 0;
+                                                    if ($bmi > 0): 
+                                                    ?>
+                                                        <div class="flex justify-between items-center py-2 border-b">
+                                                            <span class="text-gray-600 font-medium">
+                                                                <i class="fas fa-calculator icon-sm mr-2"></i>BMI
+                                                            </span>
+                                                            <span class="font-bold">
+                                                                <?php echo number_format($bmi, 1); ?>
+                                                                <span class="text-sm font-normal ml-2 text-gray-500">
+                                                                    (<?php 
+                                                                    if ($bmi < 18.5) {
+                                                                        echo 'Underweight';
+                                                                    } elseif ($bmi < 25) {
+                                                                        echo 'Normal';
+                                                                    } elseif ($bmi < 30) {
+                                                                        echo 'Overweight';
+                                                                    } else {
+                                                                        echo 'Obese';
+                                                                    }
+                                                                    ?>)
+                                                                </span>
+                                                            </span>
+                                                        </div>
+                                                    <?php endif; ?>
+                                                <?php endif; ?>
+                                                
+                                                <?php if (!empty($patient['blood_pressure'])): ?>
+                                                    <div class="flex justify-between items-center py-2 border-b">
+                                                        <span class="text-gray-600 font-medium">
+                                                            <i class="fas fa-heartbeat icon-sm mr-2 text-red-400"></i>Blood Pressure
+                                                        </span>
+                                                        <span class="font-bold"><?php echo htmlspecialchars($patient['blood_pressure']); ?></span>
+                                                    </div>
+                                                <?php endif; ?>
+                                                
+                                                <?php if (!empty($patient['temperature'])): ?>
+                                                    <div class="flex justify-between items-center py-2 border-b">
+                                                        <span class="text-gray-600 font-medium">
+                                                            <i class="fas fa-thermometer-half icon-sm mr-2 text-orange-400"></i>Temperature
+                                                        </span>
+                                                        <span class="font-bold"><?php echo htmlspecialchars($patient['temperature']); ?>°C</span>
+                                                    </div>
+                                                <?php endif; ?>
+                                            </div>
+                                        </div>
+                                        
+                                        <!-- Medical Details -->
+                                        <div>
+                                            <h4 class="font-bold text-gray-700 mb-3 text-sm">Medical Details</h4>
+                                            <div class="space-y-4">
+                                                <?php if (!empty($patient['allergies'])): ?>
+                                                    <div>
+                                                        <p class="text-sm font-bold text-gray-700 mb-2">
+                                                            <i class="fas fa-exclamation-triangle icon-sm mr-2 text-yellow-500"></i>Allergies
+                                                        </p>
+                                                        <p class="text-sm text-gray-600 bg-red-50 p-3 rounded border-l-4 border-red-400">
+                                                            <?php echo nl2br(htmlspecialchars($patient['allergies'])); ?>
+                                                        </p>
+                                                    </div>
+                                                <?php endif; ?>
+                                                
+                                                <?php if (!empty($patient['current_medications'])): ?>
+                                                    <div>
+                                                        <p class="text-sm font-bold text-gray-700 mb-2">
+                                                            <i class="fas fa-pills icon-sm mr-2 text-blue-500"></i>Current Medications
+                                                        </p>
+                                                        <p class="text-sm text-gray-600 bg-blue-50 p-3 rounded border-l-4 border-blue-400">
+                                                            <?php echo nl2br(htmlspecialchars($patient['current_medications'])); ?>
+                                                        </p>
+                                                    </div>
+                                                <?php endif; ?>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            <?php endforeach; ?>
+                        </div>
+                        <?php endif; ?>
+                    <?php endif; ?>
+                </div>
             </div>
         </div>
     </div>
 
+    <!-- Consultation Modal -->
+    <div id="consultationModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center p-4 hidden z-50">
+        <div class="bg-white rounded-lg shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
+            <div class="p-6">
+                <div class="flex justify-between items-start mb-6">
+                    <div>
+                        <h3 class="text-xl font-bold text-gray-900" id="modalTitle"></h3>
+                        <p class="text-gray-600 text-sm font-medium" id="modalSubtitle"></p>
+                    </div>
+                    <button onclick="closeModal()" class="text-gray-400 hover:text-gray-500">
+                        <i class="fas fa-times icon-lg"></i>
+                    </button>
+                </div>
+                
+                <div class="space-y-4" id="modalBody"></div>
+                
+                <div class="mt-8 pt-6 border-t border-gray-200 flex justify-end space-x-3">
+                    <button onclick="printConsultation()" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-bold">
+                        <i class="fas fa-print icon-base mr-2"></i> Print
+                    </button>
+                    <button onclick="closeModal()" class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 font-bold">
+                        Close
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="mt-12 border-t bg-white">
+        <div class="max-w-7xl mx-auto px-4 py-6 sm:px-6 lg:px-8">
+            <div class="text-center text-gray-500 text-sm">
+                <p class="font-bold">Barangay Luz Health Center • Patient Portal</p>
+                <p class="mt-1">© <?php echo date('Y'); ?> All rights reserved</p>
+            </div>
+        </div>
+    </footer>
+
     <script>
-        // Tab functionality
-        document.querySelectorAll('.nav-pill').forEach(button => {
-            button.addEventListener('click', () => {
-                // Update tabs
-                document.querySelectorAll('.nav-pill').forEach(btn => {
-                    btn.classList.remove('active');
+        // Tab switching
+        document.querySelectorAll('.tab-header').forEach(button => {
+            button.addEventListener('click', function() {
+                // Update active tab button
+                document.querySelectorAll('.tab-header').forEach(btn => {
+                    btn.classList.remove('active', 'text-blue-600', 'border-blue-600');
+                    btn.classList.add('text-gray-600');
                 });
-                button.classList.add('active');
+                this.classList.add('active', 'text-blue-600', 'border-blue-600');
+                this.classList.remove('text-gray-600');
                 
                 // Show selected tab content
-                const tabId = button.getAttribute('data-tab');
+                const tabId = this.getAttribute('data-tab');
                 document.querySelectorAll('.tab-content').forEach(content => {
+                    content.classList.add('hidden');
                     content.classList.remove('active');
                 });
-                document.getElementById(tabId).classList.add('active');
+                const tabContent = document.getElementById(tabId);
+                if (tabContent) {
+                    tabContent.classList.remove('hidden');
+                    tabContent.classList.add('active');
+                }
             });
         });
 
-        let currentConsultationNote = null;
+        // Modal functions
+        let currentConsultation = null;
 
-        // View Consultation Note Function
         function viewConsultationNote(note) {
-            currentConsultationNote = note;
+            currentConsultation = note;
             const modal = document.getElementById('consultationModal');
-            const modalContent = document.getElementById('modalContent');
-            
-            const consultationDate = new Date(note.consultation_date).toLocaleDateString('en-US', { 
-                year: 'numeric', 
-                month: 'long', 
+            const consultationDate = new Date(note.consultation_date).toLocaleDateString('en-US', {
+                year: 'numeric',
+                month: 'long',
                 day: 'numeric'
             });
             
-            const content = `
-                <h2 class="text-2xl font-bold text-gray-800 mb-2">Consultation Record</h2>
-                <p class="text-gray-600 mb-6">Date: ${consultationDate}</p>
-                
-                ${note.doctor_name ? `
-                <div class="bg-blue-50 p-4 rounded-lg mb-4">
-                    <h3 class="font-semibold text-blue-800 mb-2">Healthcare Provider</h3>
-                    <p class="text-gray-700">Dr. ${note.doctor_name}</p>
-                </div>
-                ` : ''}
-                
-                <div class="bg-gray-50 p-4 rounded-lg mb-4">
-                    <h3 class="font-semibold text-gray-800 mb-2">Consultation Notes</h3>
-                    <p class="text-gray-700 whitespace-pre-wrap">${note.note || 'No notes recorded'}</p>
-                </div>
-                
-                ${note.next_consultation_date ? `
-                <div class="bg-green-50 p-4 rounded-lg mb-4">
-                    <h3 class="font-semibold text-green-800 mb-2">Next Appointment</h3>
-                    <p class="text-gray-700">${new Date(note.next_consultation_date).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
-                </div>
-                ` : ''}
-                
-                <div class="text-sm text-gray-500 mt-6 pt-6 border-t border-gray-200">
-                    <p><i class="fas fa-calendar-alt mr-2"></i> Consultation Date: ${consultationDate}</p>
-                    <p><i class="fas fa-clock mr-2"></i> Recorded on: ${new Date(note.created_at).toLocaleString()}</p>
-                </div>
-            `;
+            document.getElementById('modalTitle').textContent = 'Consultation - ' + consultationDate;
+            document.getElementById('modalSubtitle').innerHTML = note.doctor_name 
+                ? '<i class="fas fa-user-md icon-sm mr-1"></i> With Dr. ' + note.doctor_name 
+                : 'Healthcare consultation';
             
-            modalContent.innerHTML = content;
-            modal.classList.add('active');
+            let bodyContent = '';
             
-            // Prevent body scrolling when modal is open
+            if (note.note) {
+                bodyContent += `
+                    <div>
+                        <p class="text-sm font-bold text-gray-700 mb-2">
+                            <i class="fas fa-notes-medical icon-sm mr-2"></i>Consultation Notes
+                        </p>
+                        <div class="bg-gray-50 p-4 rounded border-l-4 border-blue-400">
+                            <p class="text-gray-700 whitespace-pre-wrap font-medium">${note.note}</p>
+                        </div>
+                    </div>
+                `;
+            } else {
+                bodyContent += `
+                    <div>
+                        <p class="text-sm font-bold text-gray-700 mb-2">
+                            <i class="fas fa-notes-medical icon-sm mr-2"></i>Consultation Notes
+                        </p>
+                        <div class="bg-gray-50 p-4 rounded border-l-4 border-blue-400">
+                            <p class="text-gray-700 font-medium">No detailed notes recorded.</p>
+                        </div>
+                    </div>
+                `;
+            }
+            
+            if (note.next_consultation_date) {
+                const nextDate = new Date(note.next_consultation_date).toLocaleDateString('en-US', {
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric'
+                });
+                bodyContent += `
+                    <div class="p-4 bg-green-50 rounded border border-green-100">
+                        <p class="text-sm font-bold text-green-700 mb-1">
+                            <i class="fas fa-calendar-alt icon-sm mr-2"></i>Next Appointment
+                        </p>
+                        <p class="text-green-600 font-bold">${nextDate}</p>
+                    </div>
+                `;
+            }
+            
+            document.getElementById('modalBody').innerHTML = bodyContent;
+            modal.classList.remove('hidden');
+            
+            // Prevent scrolling on body
             document.body.style.overflow = 'hidden';
         }
 
-        // Close Modal Function
         function closeModal() {
             const modal = document.getElementById('consultationModal');
-            modal.classList.remove('active');
+            modal.classList.add('hidden');
             
-            // Restore body scrolling
+            // Restore scrolling
             document.body.style.overflow = 'auto';
         }
 
-        // Print Current Consultation Note from Modal
-        function printCurrentConsultationNote() {
-            if (currentConsultationNote) {
-                printConsultationNote(currentConsultationNote);
-            }
-        }
-
-        // Print Consultation Note Function
-        function printConsultationNote(note) {
+        function printConsultation() {
+            if (!currentConsultation) return;
+            
             const printWindow = window.open('', '_blank');
-            const consultationDate = new Date(note.consultation_date).toLocaleDateString('en-US', { 
-                year: 'numeric', 
-                month: 'long', 
+            const consultationDate = new Date(currentConsultation.consultation_date).toLocaleDateString('en-US', {
+                year: 'numeric',
+                month: 'long',
                 day: 'numeric'
             });
             
@@ -1015,55 +722,51 @@ $totalConsultationNotes = count($allConsultationNotes);
                 <!DOCTYPE html>
                 <html>
                 <head>
-                    <title>Consultation Record - ${consultationDate}</title>
+                    <title>Consultation Record</title>
                     <style>
-                        * { margin: 0; padding: 0; }
-                        body { font-family: Arial, sans-serif; color: #333; }
-                        .container { max-width: 8.5in; margin: 0 auto; padding: 40px; }
-                        header { border-bottom: 3px solid #3b82f6; margin-bottom: 30px; padding-bottom: 20px; }
-                        h1 { color: #3b82f6; font-size: 28px; margin-bottom: 5px; }
-                        .consultation-date { color: #666; font-size: 14px; }
-                        .doctor { background: #f0f9ff; padding: 15px; border-radius: 12px; margin-bottom: 20px; border-left: 4px solid #3b82f6; }
-                        .section { margin-bottom: 25px; }
-                        .section-title { color: #1f2937; font-size: 16px; font-weight: bold; margin-bottom: 10px; border-bottom: 1px solid #e5e7eb; padding-bottom: 5px; }
-                        .section-content { color: #4b5563; line-height: 1.6; white-space: pre-wrap; }
-                        footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid #e5e7eb; color: #999; font-size: 12px; }
-                        @media print { 
-                            body { margin: 0; padding: 0; }
-                            .container { padding: 0; }
+                        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; margin: 20px; }
+                        .header { text-align: center; margin-bottom: 30px; }
+                        .header h1 { color: #2563eb; margin-bottom: 5px; font-weight: bold; }
+                        .section { margin-bottom: 20px; }
+                        .section-title { color: #374151; font-weight: bold; margin-bottom: 10px; border-bottom: 1px solid #e5e7eb; padding-bottom: 5px; }
+                        .notes { background: #f9fafb; padding: 15px; border-radius: 5px; margin-bottom: 20px; border-left: 4px solid #2563eb; }
+                        .footer { margin-top: 30px; padding-top: 15px; border-top: 1px solid #e5e7eb; font-size: 12px; color: #6b7280; font-weight: bold; }
+                        @media print {
+                            body { margin: 0; padding: 10px; }
                         }
                     </style>
                 </head>
                 <body>
-                    <div class="container">
-                        <header>
-                            <h1>Consultation Record</h1>
-                            <div class="consultation-date">Date: ${consultationDate}</div>
-                        </header>
-                        
-                        ${note.doctor_name ? `
-                        <div class="doctor">
-                            <strong>Healthcare Provider:</strong><br>
-                            Dr. ${note.doctor_name}
-                        </div>
-                        ` : ''}
-                        
-                        <div class="section">
-                            <div class="section-title">📋 Consultation Notes</div>
-                            <div class="section-content">${note.note || 'No notes recorded'}</div>
-                        </div>
-                        
-                        ${note.next_consultation_date ? `
-                        <div class="section">
-                            <div class="section-title">📅 Next Appointment</div>
-                            <div class="section-content">${new Date(note.next_consultation_date).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</div>
-                        </div>
-                        ` : ''}
-                        
-                        <footer>
-                            <p>This is an official consultation record from the Community Health Tracker System.</p>
-                            <p>Printed on: ${new Date().toLocaleString()}</p>
-                        </footer>
+                    <div class="header">
+                        <h1>Consultation Record</h1>
+                        <p><strong>Barangay Luz Health Center</strong></p>
+                        <p><strong>Date:</strong> ${consultationDate}</p>
+                    </div>
+                    
+                    <div class="section">
+                        <div class="section-title">Healthcare Provider</div>
+                        <p><strong>${currentConsultation.doctor_name ? 'Dr. ' + currentConsultation.doctor_name : 'Healthcare Staff'}</strong></p>
+                    </div>
+                    
+                    <div class="section">
+                        <div class="section-title">Consultation Notes</div>
+                        <div class="notes"><strong>${currentConsultation.note || 'No detailed notes recorded.'}</strong></div>
+                    </div>
+                    
+                    ${currentConsultation.next_consultation_date ? `
+                    <div class="section">
+                        <div class="section-title">Next Appointment</div>
+                        <p><strong>${new Date(currentConsultation.next_consultation_date).toLocaleDateString('en-US', {
+                            year: 'numeric',
+                            month: 'long',
+                            day: 'numeric'
+                        })}</strong></p>
+                    </div>
+                    ` : ''}
+                    
+                    <div class="footer">
+                        <p>Printed on: ${new Date().toLocaleString()}</p>
+                        <p>This is an official record from Barangay Luz Health Center</p>
                     </div>
                 </body>
                 </html>
@@ -1071,10 +774,10 @@ $totalConsultationNotes = count($allConsultationNotes);
             
             printWindow.document.write(content);
             printWindow.document.close();
-            
-            setTimeout(() => {
+            setTimeout(function() {
                 printWindow.print();
-            }, 250);
+                printWindow.close();
+            }, 100);
         }
 
         // Close modal when clicking outside

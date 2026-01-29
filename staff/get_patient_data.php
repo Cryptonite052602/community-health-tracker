@@ -3,10 +3,18 @@ session_start();
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../config/database.php';
 
-redirectIfNotLoggedIn();
+// Check if user is logged in
+if (!isset($_SESSION['user']['id'])) {
+    die(json_encode(['error' => 'Not authenticated']));
+}
+
+// Check if user is staff
+if (!isStaff()) {
+    die(json_encode(['error' => 'Access denied']));
+}
 
 if (!isset($_GET['id'])) {
-    die('Patient ID is required');
+    die(json_encode(['error' => 'Patient ID is required']));
 }
 
 $patientId = $_GET['id'];
@@ -35,7 +43,7 @@ try {
     $patient = $stmt->fetch(PDO::FETCH_ASSOC);
 
     if (!$patient) {
-        die('Patient not found or access denied');
+        die(json_encode(['error' => 'Patient not found or access denied']));
     }
 
     // Get health information
@@ -46,14 +54,24 @@ try {
     // Merge data
     $patientData = array_merge($patient, $healthInfo ?: []);
 
+    // Calculate age if date of birth exists
+    if (!empty($patientData['date_of_birth'])) {
+        $dob = new DateTime($patientData['date_of_birth']);
+        $today = new DateTime();
+        $age = $dob->diff($today)->y;
+        $patientData['age'] = $age;
+    }
+
 } catch (PDOException $e) {
-    die('Error fetching patient data: ' . $e->getMessage());
+    die(json_encode(['error' => 'Database error: ' . $e->getMessage()]));
 }
+
+// Now output the HTML form
 ?>
 
 <!-- Patient Information Form -->
 <form id="healthInfoForm" method="POST" action="existing_info_patients.php" class="space-y-8">
-    <input type="hidden" name="patient_id" value="<?= $patientId ?>">
+    <input type="hidden" name="patient_id" value="<?= htmlspecialchars($patientId) ?>">
     <input type="hidden" name="save_health_info" value="1">
 
     <!-- Personal Information Section -->
@@ -73,14 +91,14 @@ try {
             <!-- Date of Birth -->
             <div>
                 <label class="form-label-modal required-field">Date of Birth</label>
-                <input type="date" name="date_of_birth" value="<?= $patientData['date_of_birth'] ?? '' ?>" 
+                <input type="date" name="date_of_birth" value="<?= htmlspecialchars($patientData['date_of_birth'] ?? '') ?>" 
                        required max="<?= date('Y-m-d') ?>" class="form-input-modal">
             </div>
 
             <!-- Age -->
             <div>
                 <label class="form-label-modal">Age (Auto-calculated)</label>
-                <input type="number" name="age" value="<?= $patientData['age'] ?? '' ?>" 
+                <input type="number" name="age" value="<?= htmlspecialchars($patientData['age'] ?? '') ?>" 
                        readonly class="form-input-modal readonly-field bg-gray-50">
             </div>
 
@@ -178,7 +196,7 @@ try {
             <!-- Last Checkup -->
             <div>
                 <label class="form-label-modal">Last Check-up Date</label>
-                <input type="date" name="last_checkup" value="<?= $patientData['last_checkup'] ?? '' ?>" 
+                <input type="date" name="last_checkup" value="<?= htmlspecialchars($patientData['last_checkup'] ?? '') ?>" 
                        class="form-input-modal">
             </div>
         </div>
@@ -194,21 +212,21 @@ try {
             <!-- Height -->
             <div>
                 <label class="form-label-modal required-field">Height (cm)</label>
-                <input type="number" name="height" value="<?= $patientData['height'] ?? '' ?>" 
+                <input type="number" name="height" value="<?= htmlspecialchars($patientData['height'] ?? '') ?>" 
                        required step="0.1" min="0" class="form-input-modal" placeholder="Enter height">
             </div>
 
             <!-- Weight -->
             <div>
                 <label class="form-label-modal required-field">Weight (kg)</label>
-                <input type="number" name="weight" value="<?= $patientData['weight'] ?? '' ?>" 
+                <input type="number" name="weight" value="<?= htmlspecialchars($patientData['weight'] ?? '') ?>" 
                        required step="0.1" min="0" class="form-input-modal" placeholder="Enter weight">
             </div>
 
             <!-- Temperature -->
             <div>
                 <label class="form-label-modal">Temperature (°C)</label>
-                <input type="number" name="temperature" value="<?= $patientData['temperature'] ?? '' ?>" 
+                <input type="number" name="temperature" value="<?= htmlspecialchars($patientData['temperature'] ?? '') ?>" 
                        step="0.1" class="form-input-modal" placeholder="Enter temperature">
             </div>
 
