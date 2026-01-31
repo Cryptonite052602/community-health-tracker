@@ -161,26 +161,7 @@ if (isset($_GET['restore_patient'])) {
     }
 }
 
-// Handle permanent deletion
-if (isset($_GET['permanent_delete'])) {
-    $deletedPatientId = $_GET['permanent_delete'];
-    
-    try {
-        $stmt = $pdo->prepare("DELETE FROM deleted_patients WHERE id = ? AND deleted_by = ?");
-        $stmt->execute([$deletedPatientId, $_SESSION['user']['id']]);
-        
-        if ($stmt->rowCount() > 0) {
-            $message = 'Patient record permanently deleted!';
-        } else {
-            $error = 'Record not found or access denied!';
-        }
-        
-        header('Location: deleted_patients.php');
-        exit();
-    } catch (PDOException $e) {
-        $error = 'Error permanently deleting record: ' . $e->getMessage();
-    }
-}
+// REMOVED: Permanent deletion functionality
 
 // Get all deleted patients with user information
 try {
@@ -265,7 +246,7 @@ try {
             border-radius: 8px;
         }
         
-        /* Button Styles - UPDATED: Consistent borders always visible */
+        /* Button Styles */
         .btn-primary { 
             background-color: white; 
             color: #3498db; 
@@ -292,10 +273,9 @@ try {
             background-color: #2ecc71; 
             color: #ffffff; 
             border-radius: 30px; 
-            padding: 15px 25px; 
+            padding: 12px 20px; 
             transition: all 0.3s ease; 
             font-weight: 500;
-            min-height: 45px;
             display: inline-flex;
             align-items: center;
             justify-content: center;
@@ -307,24 +287,7 @@ try {
             box-shadow: 0 4px 12px rgba(46, 204, 113, 0.15);
         }
         
-        .btn-delete { 
-            background-color: #e74c3c; 
-            color: #ffffff; 
-            border-radius: 30px; 
-            padding: 15px 25px; 
-            transition: all 0.3s ease; 
-            font-weight: 500;
-            min-height: 45px;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            text-decoration: none;
-        }
-        .btn-delete:hover { 
-            background-color: #e65e4f; 
-            transform: translateY(-2px); 
-            box-shadow: 0 4px 12px rgba(231, 76, 60, 0.15);
-        }
+        /* REMOVED: .btn-delete styling */
         
         /* Table styling */
         .patient-table { 
@@ -387,7 +350,7 @@ try {
                 <div class="flex justify-between items-center">
                     <div>
                         <h2 class="text-xl font-semibold text-secondary">Archived Patient Records</h2>
-                        <p class="text-sm text-gray-500 mt-1">Patient records that have been moved to archive</p>
+                        <p class="text-sm text-gray-500 mt-1">Patient records that have been moved to archive. Only restoration is allowed.</p>
                     </div>
                     <a href="existing_info_patients.php" class="btn-primary">
                         <i class="fas fa-arrow-left mr-2"></i>Back to Patients
@@ -414,7 +377,7 @@ try {
                                 <th>Type</th>
                                 <th>Contact</th>
                                 <th>Deleted On</th>
-                                <th>Actions</th>
+                                <th>Action</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -444,16 +407,11 @@ try {
                                         </div>
                                     </td>
                                     <td>
-                                        <div class="flex space-x-2">
+                                        <div class="flex">
                                             <a href="?restore_patient=<?= $patient['id'] ?>" 
                                                class="btn-restore" 
                                                onclick="return confirm('Are you sure you want to restore this patient record?')">
                                                 <i class="fas fa-undo mr-1"></i>Restore
-                                            </a>
-                                            <a href="?permanent_delete=<?= $patient['id'] ?>" 
-                                               class="btn-delete" 
-                                               onclick="return confirm('Are you sure you want to permanently delete this record? This action cannot be undone.')">
-                                                <i class="fas fa-trash-alt mr-1"></i>Delete
                                             </a>
                                         </div>
                                     </td>

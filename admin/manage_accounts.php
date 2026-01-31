@@ -75,7 +75,126 @@ if (isset($_GET['link_resident'])) {
 
 // Handle form submissions
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    if (isset($_POST['create_staff'])) {
+    // Handle staff password change with current password verification
+    if (isset($_POST['change_staff_password'])) {
+        $staffId = intval($_POST['staff_id']);
+        $currentPassword = trim($_POST['current_password']);
+        $newPassword = trim($_POST['new_password']);
+        $confirmPassword = trim($_POST['confirm_password']);
+        
+        if (empty($currentPassword) || empty($newPassword) || empty($confirmPassword)) {
+            $_SESSION['message'] = 'All password fields are required.';
+            $_SESSION['message_type'] = 'error';
+            header('Location: manage_accounts.php');
+            exit();
+        }
+        
+        if ($newPassword !== $confirmPassword) {
+            $_SESSION['message'] = 'New passwords do not match.';
+            $_SESSION['message_type'] = 'error';
+            header('Location: manage_accounts.php');
+            exit();
+        }
+        
+        try {
+            // Get staff current password
+            $stmt = $pdo->prepare("SELECT id, password FROM sitio1_staff WHERE id = ?");
+            $stmt->execute([$staffId]);
+            $staff = $stmt->fetch(PDO::FETCH_ASSOC);
+            
+            if (!$staff) {
+                $_SESSION['message'] = 'Staff not found.';
+                $_SESSION['message_type'] = 'error';
+                header('Location: manage_accounts.php');
+                exit();
+            }
+            
+            // Verify current password
+            if (!password_verify($currentPassword, $staff['password'])) {
+                $_SESSION['message'] = 'Current password is incorrect.';
+                $_SESSION['message_type'] = 'error';
+                header('Location: manage_accounts.php');
+                exit();
+            }
+            
+            // Update password
+            $hashedPassword = password_hash($newPassword, PASSWORD_DEFAULT);
+            $stmt = $pdo->prepare("UPDATE sitio1_staff SET password = ? WHERE id = ?");
+            $stmt->execute([$hashedPassword, $staffId]);
+            
+            $_SESSION['message'] = 'Staff password changed successfully!';
+            $_SESSION['message_type'] = 'success';
+            header('Location: manage_accounts.php');
+            exit();
+            
+        } catch (PDOException $e) {
+            $_SESSION['message'] = 'Error changing password: ' . $e->getMessage();
+            $_SESSION['message_type'] = 'error';
+            header('Location: manage_accounts.php');
+            exit();
+        }
+    }
+    // Handle resident password change with current password verification
+    elseif (isset($_POST['change_resident_password'])) {
+        $residentId = intval($_POST['resident_id']);
+        $currentPassword = trim($_POST['current_password']);
+        $newPassword = trim($_POST['new_password']);
+        $confirmPassword = trim($_POST['confirm_password']);
+        
+        if (empty($currentPassword) || empty($newPassword) || empty($confirmPassword)) {
+            $_SESSION['message'] = 'All password fields are required.';
+            $_SESSION['message_type'] = 'error';
+            header('Location: manage_accounts.php');
+            exit();
+        }
+        
+        if ($newPassword !== $confirmPassword) {
+            $_SESSION['message'] = 'New passwords do not match.';
+            $_SESSION['message_type'] = 'error';
+            header('Location: manage_accounts.php');
+            exit();
+        }
+        
+        try {
+            // Get resident current password
+            $stmt = $pdo->prepare("SELECT id, password FROM sitio1_users WHERE id = ? AND role = 'patient'");
+            $stmt->execute([$residentId]);
+            $resident = $stmt->fetch(PDO::FETCH_ASSOC);
+            
+            if (!$resident) {
+                $_SESSION['message'] = 'Resident not found.';
+                $_SESSION['message_type'] = 'error';
+                header('Location: manage_accounts.php');
+                exit();
+            }
+            
+            // Verify current password
+            if (!password_verify($currentPassword, $resident['password'])) {
+                $_SESSION['message'] = 'Current password is incorrect.';
+                $_SESSION['message_type'] = 'error';
+                header('Location: manage_accounts.php');
+                exit();
+            }
+            
+            // Update password
+            $hashedPassword = password_hash($newPassword, PASSWORD_DEFAULT);
+            $stmt = $pdo->prepare("UPDATE sitio1_users SET password = ? WHERE id = ?");
+            $stmt->execute([$hashedPassword, $residentId]);
+            
+            $_SESSION['message'] = 'Resident password changed successfully!';
+            $_SESSION['message_type'] = 'success';
+            header('Location: manage_accounts.php');
+            exit();
+            
+        } catch (PDOException $e) {
+            $_SESSION['message'] = 'Error changing password: ' . $e->getMessage();
+            $_SESSION['message_type'] = 'error';
+            header('Location: manage_accounts.php');
+            exit();
+        }
+    }
+    // Handle staff account creation
+    elseif (isset($_POST['create_staff'])) {
         $username = trim($_POST['username']);
         $password = trim($_POST['password']);
         $fullName = trim($_POST['full_name']);
@@ -100,7 +219,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                       VALUES (?, ?, ?, ?, ?, ?, ?, 'active', 1)");
                 $stmt->execute([$username, $hashedPassword, $fullName, $position, $specialization, $license_number, $_SESSION['user_id']]);
                 
-                $_SESSION['message'] = 'Staff account created successfully!';
+                $_SESSION['message'] = 'Staff account created successfully! Password: ' . htmlspecialchars($password);
                 $_SESSION['message_type'] = 'success';
                 header('Location: manage_accounts.php');
                 exit();
@@ -252,7 +371,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             // Commit transaction
             $pdo->commit();
             
-            $_SESSION['message'] = 'Resident account created successfully! Account is ready for patient record linking.';
+            $_SESSION['message'] = 'Resident account created successfully! Password: ' . htmlspecialchars($password) . ' Account is ready for patient record linking.';
             $_SESSION['message_type'] = 'success';
             header('Location: manage_accounts.php');
             exit();
@@ -266,7 +385,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             exit();
         }
     }
-    // Handle resident password reset
+    // Handle resident password reset (admin reset without current password)
     elseif (isset($_POST['reset_resident_password'])) {
         $residentId = intval($_POST['resident_id']);
         $newPassword = trim($_POST['new_password']);
@@ -302,7 +421,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $stmt = $pdo->prepare("UPDATE sitio1_users SET password = ? WHERE id = ?");
             $stmt->execute([$hashedPassword, $residentId]);
             
-            $_SESSION['message'] = 'Resident password reset successfully!';
+            $_SESSION['message'] = 'Resident password reset successfully! New password: ' . htmlspecialchars($newPassword);
             $_SESSION['message_type'] = 'success';
             header('Location: manage_accounts.php');
             exit();
@@ -820,6 +939,31 @@ try {
             box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
         }
         
+        /* Password Toggle */
+        .password-toggle {
+            position: absolute;
+            right: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: none;
+            border: none;
+            cursor: pointer;
+            color: #6b7280;
+            padding: 5px;
+        }
+        
+        .password-toggle:hover {
+            color: #374151;
+        }
+        
+        .password-container {
+            position: relative;
+        }
+        
+        .password-container .form-input {
+            padding-right: 40px;
+        }
+        
         /* Account Cards */
         .account-card {
             background: white;
@@ -1306,43 +1450,32 @@ try {
             </div>
             
             <!-- Stats Grid -->
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
-                <div class="stat-card">
-                    <h3>Active Staff</h3>
-                    <div class="number"><?= count($activeStaff) ?></div>
-                    <p class="text-sm text-green-600 mt-2">
-                        <i class="fas fa-check-circle"></i> Operational
-                    </p>
-                </div>
-                <div class="stat-card">
-                    <h3>Inactive Staff</h3>
-                    <div class="number"><?= count($inactiveStaff) ?></div>
-                    <p class="text-sm text-gray-500 mt-2">
-                        <i class="fas fa-pause-circle"></i> Suspended
-                    </p>
-                </div>
-                <div class="stat-card">
-                    <h3>Approved Residents</h3>
-                    <div class="number"><?= count($approvedResidents) ?></div>
-                    <p class="text-sm text-green-600 mt-2">
-                        <i class="fas fa-check-circle"></i> Active
-                    </p>
-                </div>
-                <div class="stat-card">
-                    <h3>Pending Residents</h3>
-                    <div class="number"><?= count($pendingResidents) ?></div>
-                    <p class="text-sm text-yellow-600 mt-2">
-                        <i class="fas fa-clock"></i> Awaiting approval
-                    </p>
-                </div>
-                <div class="stat-card">
-                    <h3>Unlinked Accounts</h3>
-                    <div class="number"><?= count($unlinkedResidents) ?></div>
-                    <p class="text-sm text-orange-600 mt-2">
-                        <i class="fas fa-unlink"></i> Need patient record
-                    </p>
-                </div>
-            </div>
+<div class="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-4 mb-8">
+    <div class="stat-card">
+        <h3>Active Staff</h3>
+        <div class="number"><?= count($activeStaff) ?></div>
+        <p class="text-sm text-green-600 mt-2">
+            <i class="fas fa-check-circle"></i> Operational
+        </p>
+    </div>
+
+    <div class="stat-card">
+        <h3>Inactive Staff</h3>
+        <div class="number"><?= count($inactiveStaff) ?></div>
+        <p class="text-sm text-gray-500 mt-2">
+            <i class="fas fa-pause-circle"></i> Suspended
+        </p>
+    </div>
+
+    <div class="stat-card">
+        <h3>Unlinked Accounts</h3>
+        <div class="number"><?= count($unlinkedResidents) ?></div>
+        <p class="text-sm text-orange-600 mt-2">
+            <i class="fas fa-unlink"></i> Need patient record
+        </p>
+    </div>
+</div>
+
         </div>
 
         <!-- Main Tabs -->
@@ -1387,9 +1520,16 @@ try {
                 </div>
                 <div class="form-group">
                     <label class="block text-sm font-bold text-gray-700 mb-2 ml-1">Password <span class="text-rose-500">*</span></label>
-                    <input type="password" name="password" required 
-                           class="w-full px-5 py-4 bg-gray-50 border border-gray-200 rounded-2xl focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all" 
-                           placeholder="Enter password">
+                    <div class="password-container relative">
+                        <input type="password" name="password" required 
+                               id="staff-password"
+                               class="w-full px-5 py-4 bg-gray-50 border border-gray-200 rounded-2xl focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all pr-10" 
+                               placeholder="Enter password">
+                        <button type="button" class="password-toggle" onclick="togglePassword('staff-password')">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                    </div>
+                    <p class="text-xs text-gray-500 mt-2">Password is visible to admin for reference</p>
                 </div>
                 <div class="form-group">
                     <label class="block text-sm font-bold text-gray-700 mb-2 ml-1">Full Name <span class="text-rose-500">*</span></label>
@@ -1473,14 +1613,18 @@ try {
                         </div>
                     </div>
 
-                    <div class="flex justify-center">
+                    <div class="flex flex-wrap justify-center gap-3">
+                        <button onclick="showChangeStaffPasswordModal(<?= $staff['id'] ?>, '<?= htmlspecialchars($staff['full_name']) ?>')"
+                                class="px-6 py-2.5 bg-blue-50 text-blue-700 font-bold rounded-full text-xs hover:bg-blue-600 hover:text-white transition-all">
+                            <i class="fas fa-key mr-2"></i> Change Password
+                        </button>
                         <form method="POST" action="">
                             <input type="hidden" name="staff_id" value="<?= $staff['id'] ?>">
                             <input type="hidden" name="action" value="deactivate">
                             <button type="submit" name="toggle_staff_status" 
-                                    class="px-8 py-3 bg-amber-50 text-amber-700 font-bold rounded-full text-xs hover:bg-amber-500 hover:text-white transition-all"
+                                    class="px-6 py-2.5 bg-amber-50 text-amber-700 font-bold rounded-full text-xs hover:bg-amber-500 hover:text-white transition-all"
                                     onclick="return confirm('Deactivate this staff account?')">
-                                <i class="fas fa-pause mr-2"></i> Deactivate Account
+                                <i class="fas fa-pause mr-2"></i> Deactivate
                             </button>
                         </form>
                     </div>
@@ -1521,6 +1665,10 @@ try {
                     </div>
 
                     <div class="flex flex-wrap justify-center gap-3">
+                        <button onclick="showChangeStaffPasswordModal(<?= $staff['id'] ?>, '<?= htmlspecialchars($staff['full_name']) ?>')"
+                                class="px-6 py-2.5 bg-blue-50 text-blue-700 font-bold rounded-full text-xs hover:bg-blue-600 hover:text-white transition-all">
+                            <i class="fas fa-key mr-2"></i> Change Password
+                        </button>
                         <form method="POST" action="">
                             <input type="hidden" name="staff_id" value="<?= $staff['id'] ?>">
                             <input type="hidden" name="action" value="activate">
@@ -1575,7 +1723,16 @@ try {
                     </div>
                     <div class="form-group">
                         <label class="block text-sm font-bold text-gray-700 mb-2 ml-1">Password <span class="text-rose-500">*</span></label>
-                        <input type="password" name="password" required class="w-full px-5 py-4 bg-gray-50 border border-gray-200 rounded-2xl focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 focus:bg-white outline-none transition-all" placeholder="••••••••">
+                        <div class="password-container relative">
+                            <input type="password" name="password" required 
+                                   id="resident-password"
+                                   class="w-full px-5 py-4 bg-gray-50 border border-gray-200 rounded-2xl focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 focus:bg-white outline-none transition-all pr-10" 
+                                   placeholder="••••••••">
+                            <button type="button" class="password-toggle" onclick="togglePassword('resident-password')">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                        </div>
+                        <p class="text-xs text-gray-500 mt-2">Password is visible to admin for reference</p>
                     </div>
                 </div>
 
@@ -1751,6 +1908,10 @@ try {
                     </div>
 
                     <div class="flex flex-wrap justify-center gap-3">
+                        <button onclick="showChangeResidentPasswordModal(<?= $resident['id'] ?>, '<?= htmlspecialchars($resident['full_name']) ?>')"
+                                class="px-6 py-2.5 bg-blue-50 text-blue-700 font-bold rounded-full text-xs hover:bg-blue-600 hover:text-white transition-all w-full">
+                            <i class="fas fa-key mr-2"></i> Change Password
+                        </button>
                         <form method="POST" action="" class="w-full">
                             <input type="hidden" name="resident_id" value="<?= $resident['id'] ?>">
                             <input type="hidden" name="action" value="suspend">
@@ -1760,10 +1921,6 @@ try {
                                 <i class="fas fa-pause mr-2"></i> Suspend Account
                             </button>
                         </form>
-                        <button onclick="showResetPasswordModal(<?= $resident['id'] ?>, '<?= htmlspecialchars($resident['full_name']) ?>')"
-                                class="px-6 py-2.5 bg-blue-50 text-blue-700 font-bold rounded-full text-xs hover:bg-blue-600 hover:text-white transition-all w-full">
-                            <i class="fas fa-key mr-2"></i> Reset Password
-                        </button>
                         <?php if (!$hasPatientRecord): ?>
                         <a href="?section=linking&focus_resident=<?= $resident['id'] ?>" 
                            class="px-6 py-2.5 bg-indigo-50 text-indigo-700 font-bold rounded-full text-xs hover:bg-indigo-600 hover:text-white transition-all w-full text-center">
@@ -1801,6 +1958,10 @@ try {
                     </div>
 
                     <div class="flex flex-wrap justify-center gap-3">
+                        <button onclick="showChangeResidentPasswordModal(<?= $resident['id'] ?>, '<?= htmlspecialchars($resident['full_name']) ?>')"
+                                class="px-6 py-2.5 bg-blue-50 text-blue-700 font-bold rounded-full text-xs hover:bg-blue-600 hover:text-white transition-all w-full">
+                            <i class="fas fa-key mr-2"></i> Change Password
+                        </button>
                         <form method="POST" action="" class="w-full">
                             <input type="hidden" name="resident_id" value="<?= $resident['id'] ?>">
                             <input type="hidden" name="action" value="approve">
@@ -1810,10 +1971,6 @@ try {
                                 <i class="fas fa-check mr-2"></i> Approve Account
                             </button>
                         </form>
-                        <button onclick="showResetPasswordModal(<?= $resident['id'] ?>, '<?= htmlspecialchars($resident['full_name']) ?>')"
-                                class="px-6 py-2.5 bg-blue-50 text-blue-700 font-bold rounded-full text-xs hover:bg-blue-600 hover:text-white transition-all w-full">
-                            <i class="fas fa-key mr-2"></i> Reset Password
-                        </button>
                     </div>
                 </div>
             <?php endforeach; ?>
@@ -1851,14 +2008,14 @@ try {
                     </div>
 
                     <div class="flex flex-wrap justify-center gap-3">
+                        <button onclick="showChangeResidentPasswordModal(<?= $resident['id'] ?>, '<?= htmlspecialchars($resident['full_name']) ?>')"
+                                class="px-6 py-2.5 bg-blue-50 text-blue-700 font-bold rounded-full text-xs hover:bg-blue-600 hover:text-white transition-all">
+                            <i class="fas fa-key mr-2"></i> Change Password
+                        </button>
                         <a href="?section=linking&focus_resident=<?= $resident['id'] ?>" 
                            class="px-6 py-2.5 bg-indigo-50 text-indigo-700 font-bold rounded-full text-xs hover:bg-indigo-600 hover:text-white transition-all">
                             <i class="fas fa-link mr-2"></i> Link Patient Record
                         </a>
-                        <button onclick="showResetPasswordModal(<?= $resident['id'] ?>, '<?= htmlspecialchars($resident['full_name']) ?>')"
-                                class="px-6 py-2.5 bg-blue-50 text-blue-700 font-bold rounded-full text-xs hover:bg-blue-600 hover:text-white transition-all">
-                            <i class="fas fa-key mr-2"></i> Reset Password
-                        </button>
                     </div>
                 </div>
             <?php endforeach; ?>
@@ -1961,9 +2118,6 @@ try {
                                             </div>
                                             <div class="flex-1 min-w-0">
                                                 <div class="font-semibold text-gray-800 truncate"><?= htmlspecialchars($patient['full_name']) ?></div>
-                                                <div class="text-xs text-gray-500 truncate mt-1">
-                                                    ID: <?= $patient['id'] ?>
-                                                </div>
                                                 <div class="flex flex-wrap gap-2 mt-2">
                                                     <?php if ($patient['age']): ?>
                                                         <span class="inline-flex items-center gap-1 text-xs text-gray-600 bg-gray-100 rounded-full px-2 py-1">
@@ -2162,7 +2316,147 @@ try {
         </div>
     </div>
 
-    <!-- Reset Password Modal -->
+    <!-- Change Staff Password Modal -->
+    <div id="changeStaffPasswordModal" class="modal">
+        <div class="modal-content">
+            <h3 class="text-xl font-bold text-gray-800 mb-4 flex items-center gap-3">
+                <i class="fas fa-key text-blue-500"></i>
+                Change Staff Password
+            </h3>
+            
+            <form method="POST" action="" id="change-staff-password-form">
+                <input type="hidden" name="staff_id" id="change-staff-id">
+                
+                <div class="form-group mb-6">
+                    <label class="form-label">Staff Name</label>
+                    <input type="text" id="change-staff-name" class="form-input bg-gray-50" readonly>
+                </div>
+                
+                <div class="form-group mb-6">
+                    <label class="form-label">Current Password <span class="text-red-500">*</span></label>
+                    <div class="password-container relative">
+                        <input type="password" name="current_password" required 
+                               id="staff-current-password"
+                               class="form-input pr-10" 
+                               placeholder="Enter current password"
+                               aria-label="Current password">
+                        <button type="button" class="password-toggle" onclick="togglePassword('staff-current-password')">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="form-group mb-6">
+                    <label class="form-label">New Password <span class="text-red-500">*</span></label>
+                    <div class="password-container relative">
+                        <input type="password" name="new_password" required 
+                               id="staff-new-password"
+                               class="form-input pr-10" 
+                               placeholder="Enter new password"
+                               aria-label="New password">
+                        <button type="button" class="password-toggle" onclick="togglePassword('staff-new-password')">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="form-group mb-8">
+                    <label class="form-label">Confirm New Password <span class="text-red-500">*</span></label>
+                    <div class="password-container relative">
+                        <input type="password" name="confirm_password" required 
+                               id="staff-confirm-password"
+                               class="form-input pr-10" 
+                               placeholder="Confirm new password"
+                               aria-label="Confirm password">
+                        <button type="button" class="password-toggle" onclick="togglePassword('staff-confirm-password')">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="flex justify-end gap-3">
+                    <button type="button" onclick="closeChangeStaffPasswordModal()" class="btn btn-warning">
+                        <i class="fas fa-times mr-2"></i> Cancel
+                    </button>
+                    <button type="submit" name="change_staff_password" class="btn btn-success">
+                        <i class="fas fa-save mr-2"></i> Change Password
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Change Resident Password Modal -->
+    <div id="changeResidentPasswordModal" class="modal">
+        <div class="modal-content">
+            <h3 class="text-xl font-bold text-gray-800 mb-4 flex items-center gap-3">
+                <i class="fas fa-key text-blue-500"></i>
+                Change Resident Password
+            </h3>
+            
+            <form method="POST" action="" id="change-resident-password-form">
+                <input type="hidden" name="resident_id" id="change-resident-id">
+                
+                <div class="form-group mb-6">
+                    <label class="form-label">Resident Name</label>
+                    <input type="text" id="change-resident-name" class="form-input bg-gray-50" readonly>
+                </div>
+                
+                <div class="form-group mb-6">
+                    <label class="form-label">Current Password <span class="text-red-500">*</span></label>
+                    <div class="password-container relative">
+                        <input type="password" name="current_password" required 
+                               id="resident-current-password"
+                               class="form-input pr-10" 
+                               placeholder="Enter current password"
+                               aria-label="Current password">
+                        <button type="button" class="password-toggle" onclick="togglePassword('resident-current-password')">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="form-group mb-6">
+                    <label class="form-label">New Password <span class="text-red-500">*</span></label>
+                    <div class="password-container relative">
+                        <input type="password" name="new_password" required 
+                               id="resident-new-password"
+                               class="form-input pr-10" 
+                               placeholder="Enter new password"
+                               aria-label="New password">
+                        <button type="button" class="password-toggle" onclick="togglePassword('resident-new-password')">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="form-group mb-8">
+                    <label class="form-label">Confirm New Password <span class="text-red-500">*</span></label>
+                    <div class="password-container relative">
+                        <input type="password" name="confirm_password" required 
+                               id="resident-confirm-password"
+                               class="form-input pr-10" 
+                               placeholder="Confirm new password"
+                               aria-label="Confirm password">
+                        <button type="button" class="password-toggle" onclick="togglePassword('resident-confirm-password')">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="flex justify-end gap-3">
+                    <button type="button" onclick="closeChangeResidentPasswordModal()" class="btn btn-warning">
+                        <i class="fas fa-times mr-2"></i> Cancel
+                    </button>
+                    <button type="submit" name="change_resident_password" class="btn btn-success">
+                        <i class="fas fa-save mr-2"></i> Change Password
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Reset Password Modal (Admin Reset - No Current Password) -->
     <div id="resetPasswordModal" class="modal">
         <div class="modal-content">
             <h3 class="text-xl font-bold text-gray-800 mb-4 flex items-center gap-3">
@@ -2180,18 +2474,30 @@ try {
                 
                 <div class="form-group mb-6">
                     <label class="form-label">New Password <span class="text-red-500">*</span></label>
-                    <input type="password" name="new_password" required 
-                           class="form-input" 
-                           placeholder="Enter new password"
-                           aria-label="New password">
+                    <div class="password-container relative">
+                        <input type="password" name="new_password" required 
+                               id="reset-new-password"
+                               class="form-input pr-10" 
+                               placeholder="Enter new password"
+                               aria-label="New password">
+                        <button type="button" class="password-toggle" onclick="togglePassword('reset-new-password')">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                    </div>
                 </div>
                 
                 <div class="form-group mb-8">
                     <label class="form-label">Confirm Password <span class="text-red-500">*</span></label>
-                    <input type="password" name="confirm_password" required 
-                           class="form-input" 
-                           placeholder="Confirm new password"
-                           aria-label="Confirm password">
+                    <div class="password-container relative">
+                        <input type="password" name="confirm_password" required 
+                               id="reset-confirm-password"
+                               class="form-input pr-10" 
+                               placeholder="Confirm new password"
+                               aria-label="Confirm password">
+                        <button type="button" class="password-toggle" onclick="togglePassword('reset-confirm-password')">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                    </div>
                 </div>
                 
                 <div class="flex justify-end gap-3">
@@ -2210,6 +2516,35 @@ try {
         // ===== GLOBAL VARIABLES =====
         let selectedResidentId = 0;
         let selectedPatientId = 0;
+
+        // ===== PASSWORD TOGGLE FUNCTION =====
+        function togglePassword(inputId) {
+            const input = document.getElementById(inputId);
+            const toggleButton = input.nextElementSibling;
+            
+            if (input.type === 'password') {
+                input.type = 'text';
+                toggleButton.innerHTML = '<i class="fas fa-eye-slash"></i>';
+            } else {
+                input.type = 'password';
+                toggleButton.innerHTML = '<i class="fas fa-eye"></i>';
+            }
+        }
+        
+        // Initialize password toggles on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            // Make staff password visible by default
+            const staffPassword = document.getElementById('staff-password');
+            if (staffPassword) {
+                staffPassword.type = 'text';
+            }
+            
+            // Make resident password visible by default
+            const residentPassword = document.getElementById('resident-password');
+            if (residentPassword) {
+                residentPassword.type = 'text';
+            }
+        });
 
         // ===== MESSAGE MODAL =====
         function showMessageModal(message, type = 'success') {
@@ -2465,6 +2800,28 @@ try {
             document.getElementById('delete-form').reset();
         }
         
+        function showChangeStaffPasswordModal(staffId, staffName) {
+            document.getElementById('change-staff-id').value = staffId;
+            document.getElementById('change-staff-name').value = staffName;
+            document.getElementById('changeStaffPasswordModal').classList.add('show');
+        }
+        
+        function closeChangeStaffPasswordModal() {
+            document.getElementById('changeStaffPasswordModal').classList.remove('show');
+            document.getElementById('change-staff-password-form').reset();
+        }
+        
+        function showChangeResidentPasswordModal(residentId, residentName) {
+            document.getElementById('change-resident-id').value = residentId;
+            document.getElementById('change-resident-name').value = residentName;
+            document.getElementById('changeResidentPasswordModal').classList.add('show');
+        }
+        
+        function closeChangeResidentPasswordModal() {
+            document.getElementById('changeResidentPasswordModal').classList.remove('show');
+            document.getElementById('change-resident-password-form').reset();
+        }
+        
         function showResetPasswordModal(residentId, residentName) {
             document.getElementById('reset-resident-id').value = residentId;
             document.getElementById('reset-resident-name').value = residentName;
@@ -2478,15 +2835,22 @@ try {
         
         // Close modals on outside click
         window.onclick = function(event) {
-            const deleteModal = document.getElementById('deleteModal');
-            const resetModal = document.getElementById('resetPasswordModal');
+            const modals = [
+                'deleteModal', 
+                'changeStaffPasswordModal', 
+                'changeResidentPasswordModal', 
+                'resetPasswordModal'
+            ];
             
-            if (event.target === deleteModal) {
-                closeDeleteModal();
-            }
-            if (event.target === resetModal) {
-                closeResetModal();
-            }
+            modals.forEach(modalId => {
+                const modal = document.getElementById(modalId);
+                if (modal && event.target === modal) {
+                    if (modalId === 'deleteModal') closeDeleteModal();
+                    if (modalId === 'changeStaffPasswordModal') closeChangeStaffPasswordModal();
+                    if (modalId === 'changeResidentPasswordModal') closeChangeResidentPasswordModal();
+                    if (modalId === 'resetPasswordModal') closeResetModal();
+                }
+            });
         }
         
         // ===== LINKING FUNCTIONS =====

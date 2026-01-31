@@ -1,4 +1,3 @@
-
 <?php
 // user/dashboard.php
 require_once __DIR__ . '/../includes/auth.php';
@@ -41,229 +40,249 @@ $analytics = [
 ];
 
 $healthIssuesData = [];
-$consultationTrends = [];
-$recentHealthUpdates = [];
+$activityLog = [];
+$announcementStats = ['accepted' => 0, 'dismissed' => 0, 'pending' => 0];
+
+// Initialize chartData with defaults BEFORE the if block
+$chartData = [
+    ['category' => 'Health Records', 'count' => 0, 'color' => '#ef4444', 'icon' => 'fas fa-heartbeat'],
+    ['category' => 'Announcements', 'count' => 0, 'color' => '#3b82f6', 'icon' => 'fas fa-bullhorn'],
+    ['category' => 'Consultations', 'count' => 0, 'color' => '#10b981', 'icon' => 'fas fa-file-medical-alt']
+];
 
 if ($userData) {
     try {
-        // Check if user_health_issues table exists
-        $healthIssuesTableExists = false;
+        // 1. Get Health Issues Count (from sitio1_patients table)
         try {
-            $testStmt = $pdo->query("SELECT 1 FROM user_health_issues LIMIT 1");
-            $healthIssuesTableExists = true;
-        } catch (Exception $e) {
-            $healthIssuesTableExists = false;
-            if (empty($error)) {
-                $error = "Note: Health issues table not found. Using demo data.";
-            }
-        }
-        
-        if ($healthIssuesTableExists) {
-            // Get health issues count
             $stmt = $pdo->prepare("
                 SELECT COUNT(*) as count 
-                FROM user_health_issues 
-                WHERE user_id = ? AND status IN ('active', 'monitoring')
+                FROM sitio1_patients 
+                WHERE user_id = ? 
+                AND deleted_at IS NULL
             ");
             $stmt->execute([$userId]);
             $analytics['health_issues'] = $stmt->fetchColumn() ?: 0;
+        } catch (Exception $e) {
+            // Fallback if table doesn't exist
+            $analytics['health_issues'] = 0;
+            if (empty($error)) {
+                $error = "Note: Could not fetch health issues count. " . $e->getMessage();
+            }
+        }
 
-            // Get resolved health issues count
+        // 2. Get Announcements Count (from announcements and user_announcements tables)
+        try {
+            // First, get all announcements targeted to this user
             $stmt = $pdo->prepare("
-                SELECT COUNT(*) as count 
-                FROM user_health_issues 
-                WHERE user_id = ? AND status = 'resolved'
+                SELECT a.id 
+                FROM sitio1_announcements a
+                LEFT JOIN user_announcements ua ON a.id = ua.announcement_id AND ua.user_id = ?
+                LEFT JOIN sitio1_staff s ON a.staff_id = s.id
+                WHERE a.status = 'active'
+                AND (a.audience_type = 'public' OR a.id IN (
+                    SELECT announcement_id FROM announcement_targets WHERE user_id = ?
+                ))
             ");
-            $stmt->execute([$userId]);
-            $analytics['resolved_issues'] = $stmt->fetchColumn() ?: 0;
-
-            // Get pending health issues count
-            $stmt = $pdo->prepare("
-                SELECT COUNT(*) as count 
-                FROM user_health_issues 
-                WHERE user_id = ? AND status = 'pending'
-            ");
-            $stmt->execute([$userId]);
-            $analytics['pending_issues'] = $stmt->fetchColumn() ?: 0;
-
-            // Get health issues by category for chart
-            $stmt = $pdo->prepare("
-                SELECT 
-                    category,
-                    COUNT(*) as count,
-                    CASE 
-                        WHEN category = 'Chronic' THEN '#ef4444'
-                        WHEN category = 'Acute' THEN '#f59e0b'
-                        WHEN category = 'Preventive' THEN '#10b981'
-                        WHEN category = 'Follow-up' THEN '#3b82f6'
-                        ELSE '#6b7280'
-                    END as color
-                FROM user_health_issues 
-                WHERE user_id = ? 
-                GROUP BY category
-                ORDER BY count DESC
-            ");
-            $stmt->execute([$userId]);
-            $healthIssuesData = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-            // Get recent health updates
-            $stmt = $pdo->prepare("
-                SELECT 
-                    uhi.id,
-                    uhi.issue_type,
-                    uhi.description,
-                    uhi.status,
-                    uhi.created_at,
-                    uhi.resolved_at,
-                    s.full_name as staff_name
-                FROM user_health_issues uhi
-                LEFT JOIN sitio1_staff s ON uhi.assigned_staff_id = s.id
-                WHERE uhi.user_id = ?
-                ORDER BY uhi.created_at DESC
-                LIMIT 5
-            ");
-            $stmt->execute([$userId]);
-            $recentHealthUpdates = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        } else {
-            // Use demo data if table doesn't exist
-            $analytics['health_issues'] = 2;
-            $analytics['resolved_issues'] = 3;
-            $analytics['pending_issues'] = 1;
+            $stmt->execute([$userId, $userId]);
+            $announcements = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            $analytics['announcements'] = count($announcements);
             
-            // Demo health issues data
-            $healthIssuesData = [
-                ['category' => 'Chronic', 'count' => 1, 'color' => '#ef4444'],
-                ['category' => 'Acute', 'count' => 1, 'color' => '#f59e0b'],
-                ['category' => 'Preventive', 'count' => 2, 'color' => '#10b981'],
-            ];
+            // Get announcement statistics
+            $stmt = $pdo->prepare("
+                SELECT status, COUNT(*) as count 
+                FROM user_announcements 
+                WHERE user_id = ?
+                GROUP BY status
+            ");
+            $stmt->execute([$userId]);
+            $announcementStatsResult = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            
+            foreach ($announcementStatsResult as $stat) {
+                $announcementStats[$stat['status']] = (int)$stat['count'];
+            }
+            
+            // Calculate pending announcements
+            $announcementStats['pending'] = $analytics['announcements'] - 
+                                            ($announcementStats['accepted'] + $announcementStats['dismissed']);
+            
+        } catch (Exception $e) {
+            $analytics['announcements'] = 0;
+            if (empty($error)) {
+                $error .= " Note: Could not fetch announcements data.";
+            }
+        }
 
-            // Demo health updates
-            $recentHealthUpdates = [
+        // 3. Get Consultations Count (from consultation_notes table)
+        try {
+            // First, get all patients linked to this user
+            $stmt = $pdo->prepare("SELECT id FROM sitio1_patients WHERE user_id = ? AND deleted_at IS NULL");
+            $stmt->execute([$userId]);
+            $patientIds = $stmt->fetchAll(PDO::FETCH_COLUMN);
+            
+            if (!empty($patientIds)) {
+                $placeholders = str_repeat('?,', count($patientIds) - 1) . '?';
+                $stmt = $pdo->prepare("
+                    SELECT COUNT(*) 
+                    FROM consultation_notes 
+                    WHERE patient_id IN ($placeholders)
+                ");
+                $stmt->execute($patientIds);
+                $analytics['consultations'] = $stmt->fetchColumn() ?: 0;
+            }
+        } catch (Exception $e) {
+            $analytics['consultations'] = 0;
+            if (empty($error)) {
+                $error .= " Note: Could not fetch consultations data.";
+            }
+        }
+
+        // 4. Get Activity Log (user logins/logouts)
+        try {
+            // First check if user_activity_log table exists
+            $tableExists = false;
+            try {
+                $testStmt = $pdo->query("SELECT 1 FROM user_activity_log LIMIT 1");
+                $tableExists = true;
+            } catch (Exception $e) {
+                $tableExists = false;
+            }
+            
+            if ($tableExists) {
+                $stmt = $pdo->prepare("
+                    SELECT 
+                        action_type,
+                        action_timestamp,
+                        ip_address,
+                        user_agent
+                    FROM user_activity_log 
+                    WHERE user_id = ?
+                    AND action_type IN ('login', 'logout')
+                    ORDER BY action_timestamp DESC
+                    LIMIT 10
+                ");
+                $stmt->execute([$userId]);
+                $activityLog = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            } else {
+                // Create demo activity log
+                $activityLog = [
+                    [
+                        'action_type' => 'login',
+                        'action_timestamp' => date('Y-m-d H:i:s'),
+                        'ip_address' => '192.168.1.1',
+                        'user_agent' => 'Chrome/Windows',
+                        'browser' => 'Chrome',
+                        'device' => 'Desktop'
+                    ],
+                    [
+                        'action_type' => 'logout',
+                        'action_timestamp' => date('Y-m-d H:i:s', strtotime('-2 hours')),
+                        'ip_address' => '192.168.1.1',
+                        'user_agent' => 'Chrome/Windows',
+                        'browser' => 'Chrome',
+                        'device' => 'Desktop'
+                    ],
+                    [
+                        'action_type' => 'login',
+                        'action_timestamp' => date('Y-m-d H:i:s', strtotime('-1 day')),
+                        'ip_address' => '192.168.1.1',
+                        'user_agent' => 'Firefox/Windows',
+                        'browser' => 'Firefox',
+                        'device' => 'Desktop'
+                    ],
+                    [
+                        'action_type' => 'login',
+                        'action_timestamp' => date('Y-m-d H:i:s', strtotime('-3 days')),
+                        'ip_address' => '192.168.1.100',
+                        'user_agent' => 'Mobile Safari',
+                        'browser' => 'Safari',
+                        'device' => 'Mobile'
+                    ],
+                    [
+                        'action_type' => 'logout',
+                        'action_timestamp' => date('Y-m-d H:i:s', strtotime('-4 days')),
+                        'ip_address' => '192.168.1.100',
+                        'user_agent' => 'Mobile Safari',
+                        'browser' => 'Safari',
+                        'device' => 'Mobile'
+                    ]
+                ];
+            }
+            
+            // Process activity log for better display
+            foreach ($activityLog as &$activity) {
+                if (!isset($activity['browser'])) {
+                    // Parse user agent to get browser info
+                    $ua = $activity['user_agent'] ?? '';
+                    if (stripos($ua, 'chrome') !== false) {
+                        $activity['browser'] = 'Chrome';
+                    } elseif (stripos($ua, 'firefox') !== false) {
+                        $activity['browser'] = 'Firefox';
+                    } elseif (stripos($ua, 'safari') !== false) {
+                        $activity['browser'] = 'Safari';
+                    } else {
+                        $activity['browser'] = 'Browser';
+                    }
+                    
+                    if (stripos($ua, 'mobile') !== false || stripos($ua, 'android') !== false || stripos($ua, 'iphone') !== false) {
+                        $activity['device'] = 'Mobile';
+                    } else {
+                        $activity['device'] = 'Desktop';
+                    }
+                }
+                
+                // Format time
+                $activity['formatted_time'] = date('h:i A', strtotime($activity['action_timestamp']));
+                $activity['formatted_date'] = date('M d, Y', strtotime($activity['action_timestamp']));
+                $activity['time_ago'] = getTimeAgo($activity['action_timestamp']);
+            }
+            
+        } catch (Exception $e) {
+            // Demo activity log on error
+            $activityLog = [
                 [
-                    'id' => 1,
-                    'issue_type' => 'Regular Check-up',
-                    'description' => 'Annual physical examination completed',
-                    'status' => 'resolved',
-                    'created_at' => date('Y-m-d', strtotime('-5 days')),
-                    'resolved_at' => date('Y-m-d', strtotime('-2 days')),
-                    'staff_name' => 'Dr. Smith'
-                ],
-                [
-                    'id' => 2,
-                    'issue_type' => 'Blood Pressure Monitoring',
-                    'description' => 'Monthly blood pressure check',
-                    'status' => 'active',
-                    'created_at' => date('Y-m-d', strtotime('-10 days')),
-                    'resolved_at' => null,
-                    'staff_name' => 'Nurse Johnson'
+                    'action_type' => 'login',
+                    'action_timestamp' => date('Y-m-d H:i:s'),
+                    'ip_address' => '192.168.1.1',
+                    'browser' => 'Chrome',
+                    'device' => 'Desktop',
+                    'formatted_time' => date('h:i A'),
+                    'formatted_date' => date('M d, Y'),
+                    'time_ago' => 'Just now'
                 ]
             ];
         }
 
-        // Get announcements count (assuming this table exists)
-        try {
-            $stmt = $pdo->prepare("
-                SELECT COUNT(*) 
-                FROM sitio1_announcements a 
-                WHERE a.status = 'active'
-                AND (expiry_date IS NULL OR expiry_date >= CURDATE())
-                AND (
-                    a.audience_type = 'public'
-                    OR 
-                    (a.audience_type = 'specific' AND a.id IN (
-                        SELECT announcement_id 
-                        FROM announcement_targets 
-                        WHERE user_id = ?
-                    ))
-                )
-            ");
-            $stmt->execute([$userId]);
-            $analytics['announcements'] = $stmt->fetchColumn() ?: 0;
-        } catch (Exception $e) {
-            $analytics['announcements'] = 3; // Demo data
-        }
-
-        // Get consultations count (assuming this table exists)
-        try {
-            $stmt = $pdo->prepare("
-                SELECT COUNT(*) 
-                FROM sitio1_consultations 
-                WHERE user_id = ? 
-                AND created_at >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
-            ");
-            $stmt->execute([$userId]);
-            $analytics['consultations'] = $stmt->fetchColumn() ?: 0;
-        } catch (Exception $e) {
-            $analytics['consultations'] = 4; // Demo data
-        }
-
-        // Get consultation trends (last 7 days)
-        try {
-            $stmt = $pdo->prepare("
-                SELECT 
-                    DATE(created_at) as date,
-                    COUNT(*) as count,
-                    status
-                FROM sitio1_consultations 
-                WHERE user_id = ? 
-                AND created_at >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)
-                GROUP BY DATE(created_at), status
-                ORDER BY date ASC
-            ");
-            $stmt->execute([$userId]);
-            $consultationTrendsRaw = $stmt->fetchAll(PDO::FETCH_ASSOC);
-            
-            if (!empty($consultationTrendsRaw)) {
-                // Process consultation trends for chart
-                $dates = [];
-                for ($i = 6; $i >= 0; $i--) {
-                    $date = date('Y-m-d', strtotime("-$i days"));
-                    $dates[$date] = [
-                        'date' => date('M d', strtotime($date)),
-                        'completed' => 0,
-                        'pending' => 0,
-                        'cancelled' => 0
-                    ];
-                }
-
-                foreach ($consultationTrendsRaw as $trend) {
-                    $date = $trend['date'];
-                    if (isset($dates[$date])) {
-                        $dates[$date][$trend['status']] = (int)$trend['count'];
-                    }
-                }
-
-                $consultationTrends = array_values($dates);
-            } else {
-                // Demo consultation trends data
-                $consultationTrends = [];
-                for ($i = 6; $i >= 0; $i--) {
-                    $date = date('M d', strtotime("-$i days"));
-                    $consultationTrends[] = [
-                        'date' => $date,
-                        'completed' => rand(0, 2),
-                        'pending' => rand(0, 1),
-                        'cancelled' => rand(0, 1)
-                    ];
-                }
-            }
-            
-        } catch (Exception $e) {
-            // Demo consultation trends data
-            $consultationTrends = [];
-            for ($i = 6; $i >= 0; $i--) {
-                $date = date('M d', strtotime("-$i days"));
-                $consultationTrends[] = [
-                    'date' => $date,
-                    'completed' => rand(0, 2),
-                    'pending' => rand(0, 1),
-                    'cancelled' => rand(0, 1)
-                ];
-            }
-        }
+        // Update chartData with actual values
+        $chartData = [
+            ['category' => 'Health Records', 'count' => $analytics['health_issues'], 'color' => '#ef4444', 'icon' => 'fas fa-heartbeat'],
+            ['category' => 'Announcements', 'count' => $analytics['announcements'], 'color' => '#3b82f6', 'icon' => 'fas fa-bullhorn'],
+            ['category' => 'Consultations', 'count' => $analytics['consultations'], 'color' => '#10b981', 'icon' => 'fas fa-file-medical-alt']
+        ];
 
     } catch (PDOException $e) {
         $error = 'Error fetching analytics data: ' . $e->getMessage();
+    }
+}
+
+// Helper function to calculate time ago
+function getTimeAgo($datetime) {
+    $time = strtotime($datetime);
+    $now = time();
+    $diff = $now - $time;
+    
+    if ($diff < 60) {
+        return 'Just now';
+    } elseif ($diff < 3600) {
+        $mins = floor($diff / 60);
+        return $mins . ' min' . ($mins > 1 ? 's' : '') . ' ago';
+    } elseif ($diff < 86400) {
+        $hours = floor($diff / 3600);
+        return $hours . ' hour' . ($hours > 1 ? 's' : '') . ' ago';
+    } elseif ($diff < 604800) {
+        $days = floor($diff / 86400);
+        return $days . ' day' . ($days > 1 ? 's' : '') . ' ago';
+    } else {
+        return date('M d, Y', $time);
     }
 }
 ?>
@@ -281,31 +300,13 @@ if ($userData) {
     <!-- Chart.js Library -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        .fixed {
-            position: fixed;
-        }
-        .inset-0 {
-            top: 0;
-            right: 0;
-            bottom: 0;
-            left: 0;
-        }
-        .hidden {
-            display: none;
-        }
-        .z-50 {
-            z-index: 50;
-        }
-
-        /* Tab styling */
-        .tab-content {
-            display: none;
-        }
-        .tab-content.active {
-            display: block;
-        }
-
-        /* Stats card styling */
+        /* Existing styles remain the same */
+        .fixed { position: fixed; }
+        .inset-0 { top: 0; right: 0; bottom: 0; left: 0; }
+        .hidden { display: none; }
+        .z-50 { z-index: 50; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
         .stats-card {
             background: white;
             border-radius: 12px;
@@ -314,13 +315,10 @@ if ($userData) {
             transition: all 0.3s ease;
             border: 1px solid #e5e7eb;
         }
-
         .stats-card:hover {
             transform: translateY(-2px);
             box-shadow: 0 8px 15px rgba(0, 0, 0, 0.1);
         }
-
-        /* Chart container */
         .chart-container {
             background: white;
             border-radius: 12px;
@@ -328,32 +326,15 @@ if ($userData) {
             box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
             border: 1px solid #e5e7eb;
         }
-
-        /* Tab active state */
         .tab-active {
             border-bottom: 2px solid #3b82f6;
             color: #2563eb;
         }
-
-        /* Dashboard stats styling */
-        .dashboard-stats {
-            margin-bottom: 2rem;
-        }
-
-        /* Blue theme for consistency */
         .blue-theme-bg {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         }
-
-        .blue-theme-text {
-            color: #3b82f6;
-        }
-
-        .blue-theme-border {
-            border-color: #3b82f6;
-        }
-
-        /* Count badge styling */
+        .blue-theme-text { color: #3b82f6; }
+        .blue-theme-border { border-color: #3b82f6; }
         .count-badge {
             display: inline-flex;
             align-items: center;
@@ -366,27 +347,12 @@ if ($userData) {
             padding: 0 0.6rem;
             margin-left: 0.5rem;
         }
-
-        /* Info card styling */
         .info-card {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
             border-radius: 16px;
             padding: 20px;
         }
-        
-        .info-card h3 {
-            color: white;
-            margin-bottom: 15px;
-        }
-        
-        .info-card p {
-            color: rgba(255, 255, 255, 0.9);
-            margin-bottom: 10px;
-            font-size: 14px;
-        }
-
-        /* Custom scrollbar */
         .custom-scrollbar::-webkit-scrollbar {
             width: 4px;
         }
@@ -397,6 +363,141 @@ if ($userData) {
             background: #cbd5e1;
             border-radius: 10px;
         }
+        
+        /* Activity Log Styles */
+        .activity-log-container {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        
+        .activity-log-item {
+            display: flex;
+            align-items: flex-start;
+            padding: 16px;
+            border-radius: 10px;
+            margin-bottom: 12px;
+            background: #f8fafc;
+            border-left: 4px solid;
+            transition: all 0.2s ease;
+        }
+        
+        .activity-log-item:hover {
+            background: #f1f5f9;
+            transform: translateX(2px);
+        }
+        
+        .activity-log-item.login {
+            border-left-color: #10b981;
+        }
+        
+        .activity-log-item.logout {
+            border-left-color: #ef4444;
+        }
+        
+        .activity-icon {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 40px;
+            height: 40px;
+            border-radius: 10px;
+            margin-right: 16px;
+            flex-shrink: 0;
+        }
+        
+        .activity-icon.login {
+            background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);
+        }
+        
+        .activity-icon.logout {
+            background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%);
+        }
+        
+        .activity-content {
+            flex: 1;
+        }
+        
+        .activity-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 4px;
+        }
+        
+        .activity-title {
+            font-weight: 600;
+            color: #1f2937;
+            font-size: 14px;
+        }
+        
+        .activity-time {
+            font-size: 12px;
+            color: #6b7280;
+            background: #f3f4f6;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-weight: 500;
+        }
+        
+        .activity-details {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            margin-top: 8px;
+        }
+        
+        .activity-detail {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 12px;
+            color: #6b7280;
+        }
+        
+        .activity-detail i {
+            font-size: 11px;
+        }
+        
+        /* Bold Icons */
+        .bold-icon {
+            font-weight: 900 !important;
+        }
+        
+        /* Chart legend items */
+        .chart-legend-item {
+            display: flex;
+            align-items: center;
+            padding: 8px 12px;
+            border-radius: 8px;
+            background: #f9fafb;
+            margin-bottom: 8px;
+            transition: all 0.2s ease;
+        }
+        
+        .chart-legend-item:hover {
+            background: #f3f4f6;
+        }
+        
+        .chart-legend-icon {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
+            margin-right: 12px;
+        }
+        
+        /* Stats card icons */
+        .stats-icon-container {
+            width: 56px;
+            height: 56px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 16px;
+        }
     </style>
 </head>
 <body class="bg-gray-100">
@@ -404,41 +505,41 @@ if ($userData) {
         <!-- Dashboard Header -->
         <div class="flex justify-between items-center mb-8">
             <h1 class="text-2xl font-bold flex items-center">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-blue-600 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                </svg>
+                <div class="stats-icon-container bg-blue-100 mr-3">
+                    <i class="fas fa-chart-pie text-blue-600 text-xl bold-icon"></i>
+                </div>
                 Health Analytics Dashboard
             </h1>
             <!-- Help Button -->
-            <button onclick="openHelpModal()" class="help-icon text-blue-600 p-8 rounded-full hover:text-blue-500 transition">
-                <i class="fa-solid fa-circle-info text-4xl"></i>
+            <button onclick="openHelpModal()" class="help-icon text-blue-600 hover:text-blue-500 transition">
+                <div class="w-14 h-14 bg-blue-100 rounded-full flex items-center justify-center">
+                    <i class="fa-solid fa-circle-question text-2xl bold-icon"></i>
+                </div>
             </button>
         </div>
 
         <?php if ($error): ?>
             <div class="bg-yellow-100 border border-yellow-400 text-yellow-700 px-4 py-3 rounded mb-4 flex items-center">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
-                    <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
-                </svg>
-                Note: <?= htmlspecialchars($error) ?>
+                <div class="w-8 h-8 bg-yellow-200 rounded-full flex items-center justify-center mr-3">
+                    <i class="fas fa-exclamation-circle text-yellow-600 bold-icon"></i>
+                </div>
+                <span>Note: <?= htmlspecialchars($error) ?></span>
             </div>
         <?php endif; ?>
         
         <?php if ($success): ?>
             <div class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-4 flex items-center">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
-                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
-                </svg>
-                <?= htmlspecialchars($success) ?>
+                <div class="w-8 h-8 bg-green-200 rounded-full flex items-center justify-center mr-3">
+                    <i class="fas fa-check-circle text-green-600 bold-icon"></i>
+                </div>
+                <span><?= htmlspecialchars($success) ?></span>
             </div>
         <?php endif; ?>
 
         <!-- Main Tabs - Only Analytics -->
         <div class="flex border-b border-gray-200 mb-6">
             <a href="?tab=analytics" class="<?= $activeTab === 'analytics' ? 'border-b-2 border-blue-500 text-blue-600' : 'text-gray-500 hover:text-gray-700' ?> px-4 py-2 font-medium flex items-center">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                </svg>
+                <i class="fas fa-chart-pie text-lg mr-2 bold-icon"></i>
                 Health Analytics
             </a>
         </div>
@@ -448,40 +549,32 @@ if ($userData) {
             <!-- Health Analytics Dashboard -->
             <div class="space-y-8">
                 <!-- Stats Overview Cards -->
-                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     <!-- Health Issues Card -->
                     <div class="stats-card">
                         <div class="flex items-center">
-                            <div class="w-12 h-12 bg-red-100 rounded-lg flex items-center justify-center mr-4">
-                                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 01118 0z" />
-                                </svg>
+                            <div class="stats-icon-container bg-red-100">
+                                <i class="fas fa-heartbeat text-red-600 text-2xl bold-icon"></i>
                             </div>
                             <div>
-                                <h3 class="text-lg font-semibold text-gray-700">Health Issues</h3>
+                                <h3 class="text-lg font-semibold text-gray-700">Health Records</h3>
                                 <p class="text-3xl font-bold text-red-600"><?= $analytics['health_issues'] ?></p>
-                                <p class="text-sm text-gray-500 mt-1">Active & Monitoring</p>
+                                <p class="text-sm text-gray-500 mt-1">Linked patient records</p>
                             </div>
                         </div>
-                        <div class="mt-4 flex items-center justify-between">
-                            <span class="text-sm text-green-600 font-medium">
-                                <i class="fas fa-check-circle mr-1"></i>
-                                <?= $analytics['resolved_issues'] ?> Resolved
-                            </span>
-                            <span class="text-sm text-yellow-600 font-medium">
-                                <i class="fas fa-clock mr-1"></i>
-                                <?= $analytics['pending_issues'] ?> Pending
-                            </span>
+                        <div class="mt-4">
+                            <a href="profile.php" class="text-sm text-red-600 font-medium hover:text-red-800 flex items-center">
+                                <i class="fas fa-external-link-alt mr-2 bold-icon"></i>
+                                View health records
+                            </a>
                         </div>
                     </div>
 
                     <!-- Announcements Card -->
                     <div class="stats-card">
                         <div class="flex items-center">
-                            <div class="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center mr-4">
-                                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-                                </svg>
+                            <div class="stats-icon-container bg-blue-100">
+                                <i class="fas fa-bullhorn text-blue-600 text-2xl bold-icon"></i>
                             </div>
                             <div>
                                 <h3 class="text-lg font-semibold text-gray-700">Announcements</h3>
@@ -490,232 +583,202 @@ if ($userData) {
                             </div>
                         </div>
                         <div class="mt-4">
-                            <a href="#" class="text-sm text-blue-600 font-medium hover:text-blue-800 flex items-center">
-                                <i class="fas fa-external-link-alt mr-1"></i>
-                                View all announcements
-                            </a>
+                            <div class="flex justify-between text-sm">
+                                <span class="text-green-600 font-medium flex items-center">
+                                    <i class="fas fa-check-circle mr-2 bold-icon"></i>
+                                    <?= $announcementStats['accepted'] ?> Accepted
+                                </span>
+                                <span class="text-yellow-600 font-medium flex items-center">
+                                    <i class="fas fa-clock mr-2 bold-icon"></i>
+                                    <?= $announcementStats['pending'] ?> Pending
+                                </span>
+                            </div>
                         </div>
                     </div>
 
                     <!-- Consultations Card -->
                     <div class="stats-card">
                         <div class="flex items-center">
-                            <div class="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center mr-4">
-                                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                                </svg>
+                            <div class="stats-icon-container bg-green-100">
+                                <i class="fas fa-file-medical-alt text-green-600 text-2xl bold-icon"></i>
                             </div>
                             <div>
                                 <h3 class="text-lg font-semibold text-gray-700">Consultations</h3>
                                 <p class="text-3xl font-bold text-green-600"><?= $analytics['consultations'] ?></p>
-                                <p class="text-sm text-gray-500 mt-1">Last 30 days</p>
+                                <p class="text-sm text-gray-500 mt-1">Total consultation notes</p>
                             </div>
                         </div>
                         <div class="mt-4">
-                            <a href="#" class="text-sm text-green-600 font-medium hover:text-green-800 flex items-center">
-                                <i class="fas fa-history mr-1"></i>
+                            <a href="profile.php" class="text-sm text-green-600 font-medium hover:text-green-800 flex items-center">
+                                <i class="fas fa-history mr-2 bold-icon"></i>
                                 View consultation history
                             </a>
                         </div>
                     </div>
+                </div>
 
-                    <!-- Health Score Card -->
-                    <div class="stats-card">
-                        <div class="flex items-center">
-                            <div class="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center mr-4">
-                                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z" />
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.488 9H15V3.512A9.025 9.025 0 0120.488 9z" />
-                                </svg>
+                <!-- Charts and Activity Log Section -->
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <!-- Donut Chart -->
+                    <div class="chart-container">
+                        <div class="flex items-center mb-4">
+                            <div class="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center mr-3">
+                                <i class="fas fa-chart-pie text-blue-600 text-lg bold-icon"></i>
                             </div>
-                            <div>
-                                <h3 class="text-lg font-semibold text-gray-700">Health Score</h3>
-                                <p class="text-3xl font-bold text-purple-600">
-                                    <?php 
-                                        $score = 100 - ($analytics['health_issues'] * 5);
-                                        echo max(60, min(100, $score));
-                                    ?>
-                                </p>
-                                <p class="text-sm text-gray-500 mt-1">Overall wellness</p>
-                            </div>
+                            <h3 class="text-lg font-semibold text-gray-800">Health Overview Distribution</h3>
+                        </div>
+                        <div class="h-64">
+                            <canvas id="overviewChart"></canvas>
                         </div>
                         <div class="mt-4">
-                            <div class="w-full bg-gray-200 rounded-full h-2">
-                                <div class="bg-purple-600 h-2 rounded-full" style="width: <?= max(60, min(100, $score)) ?>%"></div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Charts Section -->
-                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    <!-- Health Issues by Category (Donut Chart) -->
-                    <div class="chart-container">
-                        <h3 class="text-lg font-semibold text-gray-800 mb-4 flex items-center">
-                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-red-500 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z" />
-                            </svg>
-                            Health Issues by Category
-                        </h3>
-                        <div class="h-64">
-                            <canvas id="healthIssuesChart"></canvas>
-                        </div>
-                        <?php if (!empty($healthIssuesData)): ?>
-                            <div class="mt-4 grid grid-cols-2 gap-2">
-                                <?php foreach ($healthIssuesData as $category): ?>
-                                    <div class="flex items-center">
-                                        <div class="w-3 h-3 rounded-full mr-2" style="background-color: <?= $category['color'] ?>"></div>
-                                        <span class="text-sm text-gray-700"><?= htmlspecialchars($category['category']) ?></span>
-                                        <span class="ml-auto text-sm font-semibold" style="color: <?= $category['color'] ?>"><?= $category['count'] ?></span>
+                            <?php foreach ($chartData as $item): ?>
+                                <div class="chart-legend-item">
+                                    <div class="chart-legend-icon" style="background-color: <?= $item['color'] ?>20;">
+                                        <i class="<?= $item['icon'] ?>" style="color: <?= $item['color'] ?>; font-weight: 900;"></i>
                                     </div>
-                                <?php endforeach; ?>
-                            </div>
-                        <?php else: ?>
-                            <div class="h-64 flex items-center justify-center">
-                                <div class="text-center">
-                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 mx-auto text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 01118 0z" />
-                                    </svg>
-                                    <p class="text-gray-500 mt-2">No health issues data available</p>
-                                </div>
-                            </div>
-                        <?php endif; ?>
-                    </div>
-
-                    <!-- Consultation Trends (Bar Chart) -->
-                    <div class="chart-container">
-                        <h3 class="text-lg font-semibold text-gray-800 mb-4 flex items-center">
-                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-blue-500 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                            </svg>
-                            Consultation Trends (7 Days)
-                        </h3>
-                        <div class="h-64">
-                            <canvas id="consultationTrendsChart"></canvas>
-                        </div>
-                        <?php if (!empty($consultationTrends)): ?>
-                            <div class="mt-4 flex justify-center space-x-4">
-                                <div class="flex items-center">
-                                    <div class="w-3 h-3 bg-green-500 rounded-full mr-2"></div>
-                                    <span class="text-sm text-gray-700">Completed</span>
-                                </div>
-                                <div class="flex items-center">
-                                    <div class="w-3 h-3 bg-yellow-500 rounded-full mr-2"></div>
-                                    <span class="text-sm text-gray-700">Pending</span>
-                                </div>
-                                <div class="flex items-center">
-                                    <div class="w-3 h-3 bg-red-500 rounded-full mr-2"></div>
-                                    <span class="text-sm text-gray-700">Cancelled</span>
-                                </div>
-                            </div>
-                        <?php else: ?>
-                            <div class="h-64 flex items-center justify-center">
-                                <div class="text-center">
-                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 mx-auto text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                                    </svg>
-                                    <p class="text-gray-500 mt-2">No consultation data available</p>
-                                </div>
-                            </div>
-                        <?php endif; ?>
-                    </div>
-                </div>
-
-                <!-- Recent Health Updates -->
-                <div class="chart-container">
-                    <h3 class="text-lg font-semibold text-gray-800 mb-4 flex items-center">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-green-500 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
-                        </svg>
-                        Recent Health Updates
-                    </h3>
-                    <div class="space-y-4">
-                        <?php if (!empty($recentHealthUpdates)): ?>
-                            <?php foreach ($recentHealthUpdates as $update): ?>
-                                <div class="border border-gray-200 rounded-lg p-4 hover:shadow-md transition">
-                                    <div class="flex justify-between items-start">
-                                        <div>
-                                            <h4 class="font-semibold text-gray-800">
-                                                <?= htmlspecialchars($update['issue_type']) ?>
-                                            </h4>
-                                            <p class="text-sm text-gray-600 mt-1">
-                                                <?= htmlspecialchars($update['description']) ?>
-                                            </p>
-                                            <div class="flex items-center mt-2 space-x-4">
-                                                <span class="text-xs px-2 py-1 rounded-full 
-                                                    <?= $update['status'] === 'resolved' ? 'bg-green-100 text-green-800' : 
-                                                       ($update['status'] === 'pending' ? 'bg-yellow-100 text-yellow-800' : 
-                                                       'bg-blue-100 text-blue-800') ?>">
-                                                    <?= ucfirst($update['status']) ?>
-                                                </span>
-                                                <span class="text-xs text-gray-500">
-                                                    <i class="far fa-clock mr-1"></i>
-                                                    <?= date('M d, Y', strtotime($update['created_at'])) ?>
-                                                </span>
-                                                <?php if (!empty($update['staff_name'])): ?>
-                                                    <span class="text-xs text-gray-500">
-                                                        <i class="fas fa-user-md mr-1"></i>
-                                                        <?= htmlspecialchars($update['staff_name']) ?>
-                                                    </span>
-                                                <?php endif; ?>
-                                            </div>
-                                        </div>
-                                        <?php if ($update['status'] === 'resolved' && $update['resolved_at']): ?>
-                                            <div class="text-right">
-                                                <span class="text-xs text-green-600 font-medium">
-                                                    <i class="fas fa-check-circle mr-1"></i>
-                                                    Resolved
-                                                </span>
-                                                <p class="text-xs text-gray-500 mt-1">
-                                                    <?= date('M d, Y', strtotime($update['resolved_at'])) ?>
-                                                </p>
-                                            </div>
-                                        <?php endif; ?>
+                                    <div class="flex-1">
+                                        <span class="text-sm font-medium text-gray-700"><?= $item['category'] ?></span>
                                     </div>
+                                    <span class="text-lg font-bold" style="color: <?= $item['color'] ?>"><?= $item['count'] ?></span>
                                 </div>
                             <?php endforeach; ?>
-                        <?php else: ?>
-                            <div class="text-center py-8">
-                                <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 mx-auto text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 01118 0z" />
-                                </svg>
-                                <p class="text-gray-500 mt-2">No recent health updates</p>
+                        </div>
+                    </div>
+
+                    <!-- Activity Log -->
+                    <div class="chart-container">
+                        <div class="flex items-center mb-4">
+                            <div class="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center mr-3">
+                                <i class="fas fa-history text-purple-600 text-lg bold-icon"></i>
                             </div>
-                        <?php endif; ?>
+                            <h3 class="text-lg font-semibold text-gray-800">Recent Activity Log</h3>
+                        </div>
+                        
+                        <div class="activity-log-container custom-scrollbar">
+                            <?php if (!empty($activityLog)): ?>
+                                <div class="space-y-2">
+                                    <?php foreach ($activityLog as $activity): ?>
+                                        <div class="activity-log-item <?= $activity['action_type'] ?>">
+                                            <div class="activity-icon <?= $activity['action_type'] ?>">
+                                                <?php if ($activity['action_type'] == 'login'): ?>
+                                                    <i class="fas fa-sign-in-alt text-green-600 text-lg bold-icon"></i>
+                                                <?php else: ?>
+                                                    <i class="fas fa-sign-out-alt text-red-600 text-lg bold-icon"></i>
+                                                <?php endif; ?>
+                                            </div>
+                                            
+                                            <div class="activity-content">
+                                                <div class="activity-header">
+                                                    <div>
+                                                        <div class="activity-title">
+                                                            <?php if ($activity['action_type'] == 'login'): ?>
+                                                                <span class="text-green-600">Account Login</span>
+                                                            <?php else: ?>
+                                                                <span class="text-red-600">Account Logout</span>
+                                                            <?php endif; ?>
+                                                        </div>
+                                                        <p class="text-xs text-gray-500 mt-1">
+                                                            <?= $activity['formatted_date'] ?>
+                                                        </p>
+                                                    </div>
+                                                    <span class="activity-time">
+                                                        <?= $activity['formatted_time'] ?>
+                                                    </span>
+                                                </div>
+                                                
+                                                <div class="activity-details">
+                                                    <div class="activity-detail">
+                                                        <i class="fas fa-clock text-gray-400 bold-icon"></i>
+                                                        <span><?= $activity['time_ago'] ?></span>
+                                                    </div>
+                                                    <div class="activity-detail">
+                                                        <i class="fas fa-network-wired text-gray-400 bold-icon"></i>
+                                                        <span><?= htmlspecialchars($activity['ip_address'] ?? 'N/A') ?></span>
+                                                    </div>
+                                                    <div class="activity-detail">
+                                                        <?php if ($activity['device'] == 'Mobile'): ?>
+                                                            <i class="fas fa-mobile-alt text-gray-400 bold-icon"></i>
+                                                        <?php else: ?>
+                                                            <i class="fas fa-desktop text-gray-400 bold-icon"></i>
+                                                        <?php endif; ?>
+                                                        <span><?= $activity['browser'] ?> • <?= $activity['device'] ?></span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    <?php endforeach; ?>
+                                </div>
+                            <?php else: ?>
+                                <div class="text-center py-8">
+                                    <div class="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                                        <i class="fas fa-history text-2xl text-gray-300 bold-icon"></i>
+                                    </div>
+                                    <p class="text-gray-500">No recent activity found</p>
+                                    <p class="text-sm text-gray-400 mt-1">Your login/logout activities will appear here</p>
+                                </div>
+                            <?php endif; ?>
+                        </div>
+                        
+                        <div class="mt-4 pt-4 border-t border-gray-200">
+                            <div class="flex justify-between text-sm text-gray-600">
+                                <span class="flex items-center">
+                                    <div class="w-3 h-3 bg-green-500 rounded-full mr-2"></div>
+                                    Login Activities
+                                </span>
+                                <span class="flex items-center">
+                                    <div class="w-3 h-3 bg-red-500 rounded-full mr-2"></div>
+                                    Logout Activities
+                                </span>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
-                <!-- Quick Insights Card -->
-                <div class="info-card">
-                    <h3 class="text-white mb-4 text-lg font-semibold flex items-center">
-                        <i class="fas fa-lightbulb mr-2"></i>
-                        Health Insights
-                    </h3>
-                    <div class="space-y-3">
-                        <p class="text-white text-sm flex items-start">
-                            <i class="fas fa-check-circle mt-1 mr-2 text-green-300"></i>
-                            <span>You have <?= $analytics['resolved_issues'] ?> resolved health issues. Great progress!</span>
-                        </p>
-                        <p class="text-white text-sm flex items-start">
-                            <i class="fas fa-bell mt-1 mr-2 text-yellow-300"></i>
-                            <span>There are <?= $analytics['announcements'] ?> important announcements for you.</span>
-                        </p>
-                        <p class="text-white text-sm flex items-start">
-                            <i class="fas fa-calendar-alt mt-1 mr-2 text-blue-300"></i>
-                            <span>You've had <?= $analytics['consultations'] ?> consultations in the last 30 days.</span>
-                        </p>
-                        <?php if ($analytics['pending_issues'] > 0): ?>
-                            <p class="text-white text-sm flex items-start">
-                                <i class="fas fa-exclamation-triangle mt-1 mr-2 text-red-300"></i>
-                                <span>You have <?= $analytics['pending_issues'] ?> pending health issues requiring attention.</span>
-                            </p>
-                        <?php endif; ?>
+                <!-- Announcement Response Stats -->
+                <div class="chart-container">
+                    <div class="flex items-center mb-4">
+                        <div class="w-10 h-10 bg-yellow-100 rounded-lg flex items-center justify-center mr-3">
+                            <i class="fas fa-bell text-yellow-600 text-lg bold-icon"></i>
+                        </div>
+                        <h3 class="text-lg font-semibold text-gray-800">Announcement Response Statistics</h3>
                     </div>
-                    <div class="mt-6">
-                        <a href="#" class="bg-white text-blue-600 px-6 py-3 rounded-full font-semibold hover:bg-gray-100 transition duration-200 inline-flex items-center">
-                            <i class="fas fa-chart-line mr-2"></i>
-                            View Detailed Reports
-                        </a>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div class="bg-green-50 border border-green-200 rounded-xl p-5 hover:shadow-md transition-shadow">
+                            <div class="flex items-center">
+                                <div class="w-16 h-16 bg-green-100 rounded-xl flex items-center justify-center mr-4">
+                                    <i class="fas fa-check text-green-600 text-2xl bold-icon"></i>
+                                </div>
+                                <div>
+                                    <p class="text-3xl font-bold text-green-800"><?= $announcementStats['accepted'] ?></p>
+                                    <p class="text-sm text-green-600 font-medium">Accepted</p>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="bg-yellow-50 border border-yellow-200 rounded-xl p-5 hover:shadow-md transition-shadow">
+                            <div class="flex items-center">
+                                <div class="w-16 h-16 bg-yellow-100 rounded-xl flex items-center justify-center mr-4">
+                                    <i class="fas fa-clock text-yellow-600 text-2xl bold-icon"></i>
+                                </div>
+                                <div>
+                                    <p class="text-3xl font-bold text-yellow-800"><?= $announcementStats['pending'] ?></p>
+                                    <p class="text-sm text-yellow-600 font-medium">Pending Response</p>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="bg-gray-100 border border-gray-300 rounded-xl p-5 hover:shadow-md transition-shadow">
+                            <div class="flex items-center">
+                                <div class="w-16 h-16 bg-gray-200 rounded-xl flex items-center justify-center mr-4">
+                                    <i class="fas fa-times text-gray-600 text-2xl bold-icon"></i>
+                                </div>
+                                <div>
+                                    <p class="text-3xl font-bold text-gray-800"><?= $announcementStats['dismissed'] ?></p>
+                                    <p class="text-sm text-gray-600 font-medium">Dismissed</p>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -732,7 +795,7 @@ if ($userData) {
                         <p class="text-blue-100 text-sm">Understanding your health analytics</p>
                     </div>
                     <button onclick="closeHelpModal()" class="text-white hover:text-blue-200 transition-colors">
-                        <i class="fas fa-times text-2xl"></i>
+                        <i class="fas fa-times text-2xl bold-icon"></i>
                     </button>
                 </div>
             </div>
@@ -740,42 +803,42 @@ if ($userData) {
             <div class="px-8 py-6">
                 <div class="space-y-6">
                     <div class="flex items-start">
-                        <div class="flex-shrink-0 w-10 h-10 bg-red-100 rounded-lg flex items-center justify-center mr-4">
-                            <i class="fas fa-heartbeat text-red-600"></i>
+                        <div class="flex-shrink-0 w-12 h-12 bg-red-100 rounded-lg flex items-center justify-center mr-4">
+                            <i class="fas fa-heartbeat text-red-600 text-lg bold-icon"></i>
                         </div>
                         <div>
-                            <h4 class="font-semibold text-gray-800 text-lg mb-2">Health Issues Tracking</h4>
-                            <p class="text-gray-600">Monitor your active and resolved health conditions. The donut chart shows distribution by category.</p>
+                            <h4 class="font-semibold text-gray-800 text-lg mb-2">Health Records</h4>
+                            <p class="text-gray-600">Number of patient profiles linked to your account from the sitio1_patients table.</p>
                         </div>
                     </div>
 
                     <div class="flex items-start">
-                        <div class="flex-shrink-0 w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center mr-4">
-                            <i class="fas fa-chart-bar text-blue-600"></i>
-                        </div>
-                        <div>
-                            <h4 class="font-semibold text-gray-800 text-lg mb-2">Consultation Trends</h4>
-                            <p class="text-gray-600">Track your consultation patterns over the last 7 days. See completed, pending, and cancelled appointments.</p>
-                        </div>
-                    </div>
-
-                    <div class="flex items-start">
-                        <div class="flex-shrink-0 w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center mr-4">
-                            <i class="fas fa-bullhorn text-green-600"></i>
+                        <div class="flex-shrink-0 w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center mr-4">
+                            <i class="fas fa-bullhorn text-blue-600 text-lg bold-icon"></i>
                         </div>
                         <div>
                             <h4 class="font-semibold text-gray-800 text-lg mb-2">Announcements</h4>
-                            <p class="text-gray-600">Stay updated with important health announcements and community updates relevant to you.</p>
+                            <p class="text-gray-600">Active announcements targeted to you. Track your responses and pending items.</p>
                         </div>
                     </div>
 
                     <div class="flex items-start">
-                        <div class="flex-shrink-0 w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center mr-4">
-                            <i class="fas fa-chart-line text-purple-600"></i>
+                        <div class="flex-shrink-0 w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center mr-4">
+                            <i class="fas fa-file-medical-alt text-green-600 text-lg bold-icon"></i>
                         </div>
                         <div>
-                            <h4 class="font-semibold text-gray-800 text-lg mb-2">Health Score</h4>
-                            <p class="text-gray-600">Your overall wellness score based on active health issues and consultation patterns.</p>
+                            <h4 class="font-semibold text-gray-800 text-lg mb-2">Consultations</h4>
+                            <p class="text-gray-600">Total consultation notes from all linked patient profiles in the consultation_notes table.</p>
+                        </div>
+                    </div>
+
+                    <div class="flex items-start">
+                        <div class="flex-shrink-0 w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center mr-4">
+                            <i class="fas fa-history text-purple-600 text-lg bold-icon"></i>
+                        </div>
+                        <div>
+                            <h4 class="font-semibold text-gray-800 text-lg mb-2">Activity Log</h4>
+                            <p class="text-gray-600">Track your login and logout activities with timestamps and IP addresses.</p>
                         </div>
                     </div>
                 </div>
@@ -783,7 +846,7 @@ if ($userData) {
 
             <div class="px-8 py-6 bg-gray-50 border-t border-gray-200">
                 <button type="button" onclick="closeHelpModal()" class="px-7 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white font-medium rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all shadow-md hover:shadow-lg flex items-center">
-                    <i class="fas fa-check mr-2"></i>
+                    <i class="fas fa-check mr-2 bold-icon"></i>
                     Got it, thanks!
                 </button>
             </div>
@@ -793,106 +856,63 @@ if ($userData) {
     <script>
         // Initialize Charts
         document.addEventListener('DOMContentLoaded', function() {
-            // Health Issues Donut Chart
-            <?php if (!empty($healthIssuesData)): ?>
-                const healthIssuesCtx = document.getElementById('healthIssuesChart').getContext('2d');
-                const healthIssuesChart = new Chart(healthIssuesCtx, {
-                    type: 'doughnut',
-                    data: {
-                        labels: <?= json_encode(array_column($healthIssuesData, 'category')) ?>,
-                        datasets: [{
-                            data: <?= json_encode(array_column($healthIssuesData, 'count')) ?>,
-                            backgroundColor: <?= json_encode(array_column($healthIssuesData, 'color')) ?>,
-                            borderWidth: 2,
-                            borderColor: '#ffffff'
-                        }]
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        plugins: {
-                            legend: {
-                                display: false
-                            },
-                            tooltip: {
-                                callbacks: {
-                                    label: function(context) {
-                                        return `${context.label}: ${context.raw} issues`;
-                                    }
-                                }
-                            }
+            // Overview Donut Chart
+            const chartData = <?= json_encode($chartData) ?>;
+            
+            const overviewCtx = document.getElementById('overviewChart').getContext('2d');
+            const overviewChart = new Chart(overviewCtx, {
+                type: 'doughnut',
+                data: {
+                    labels: chartData.map(item => item.category),
+                    datasets: [{
+                        data: chartData.map(item => item.count),
+                        backgroundColor: chartData.map(item => item.color),
+                        borderWidth: 2,
+                        borderColor: '#ffffff'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false
                         },
-                        cutout: '70%'
-                    }
-                });
-            <?php endif; ?>
-
-            // Consultation Trends Bar Chart
-            <?php if (!empty($consultationTrends)): ?>
-                const trendsCtx = document.getElementById('consultationTrendsChart').getContext('2d');
-                const consultationTrendsChart = new Chart(trendsCtx, {
-                    type: 'bar',
-                    data: {
-                        labels: <?= json_encode(array_column($consultationTrends, 'date')) ?>,
-                        datasets: [
-                            {
-                                label: 'Completed',
-                                data: <?= json_encode(array_column($consultationTrends, 'completed')) ?>,
-                                backgroundColor: '#10b981',
-                                borderColor: '#10b981',
-                                borderWidth: 1
-                            },
-                            {
-                                label: 'Pending',
-                                data: <?= json_encode(array_column($consultationTrends, 'pending')) ?>,
-                                backgroundColor: '#f59e0b',
-                                borderColor: '#f59e0b',
-                                borderWidth: 1
-                            },
-                            {
-                                label: 'Cancelled',
-                                data: <?= json_encode(array_column($consultationTrends, 'cancelled')) ?>,
-                                backgroundColor: '#ef4444',
-                                borderColor: '#ef4444',
-                                borderWidth: 1
-                            }
-                        ]
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        scales: {
-                            x: {
-                                stacked: true,
-                                grid: {
-                                    display: false
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return `${context.label}: ${context.raw}`;
                                 }
-                            },
-                            y: {
-                                stacked: true,
-                                beginAtZero: true,
-                                ticks: {
-                                    stepSize: 1
-                                }
-                            }
-                        },
-                        plugins: {
-                            legend: {
-                                display: false
                             }
                         }
-                    }
-                });
-            <?php endif; ?>
+                    },
+                    cutout: '70%'
+                }
+            });
+            
+            // Add animation to activity log items
+            const activityItems = document.querySelectorAll('.activity-log-item');
+            activityItems.forEach((item, index) => {
+                item.style.opacity = '0';
+                item.style.transform = 'translateX(-10px)';
+                
+                setTimeout(() => {
+                    item.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
+                    item.style.opacity = '1';
+                    item.style.transform = 'translateX(0)';
+                }, index * 100);
+            });
         });
 
         // Help modal functions
         function openHelpModal() {
             document.getElementById('helpModal').classList.remove('hidden');
+            document.body.style.overflow = 'hidden';
         }
 
         function closeHelpModal() {
             document.getElementById('helpModal').classList.add('hidden');
+            document.body.style.overflow = 'auto';
         }
 
         // Close modal when clicking outside
@@ -902,6 +922,13 @@ if ($userData) {
                 closeHelpModal();
             }
         }
+
+        // Close modal with Escape key
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                closeHelpModal();
+            }
+        });
     </script>
 </body>
 </html>

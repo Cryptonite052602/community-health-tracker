@@ -8,6 +8,7 @@ if (!isStaff()) {
 }
 
 $patientId = isset($_GET['id']) ? intval($_GET['id']) : 0;
+$noteId = isset($_GET['note_id']) ? intval($_GET['note_id']) : 0; // NEW: Get specific note ID
 
 if ($patientId <= 0) {
     header('HTTP/1.0 400 Bad Request');
@@ -61,6 +62,55 @@ try {
         $healthInfo = [];
     }
     
+    // Get specific consultation note if note_id is provided
+    $currentDoctor = '';
+    if ($noteId > 0) {
+        $stmt = $pdo->prepare("
+            SELECT doctor_name 
+            FROM consultation_notes 
+            WHERE id = ? AND patient_id = ?
+        ");
+        $stmt->execute([$noteId, $patientId]);
+        $currentNote = $stmt->fetch(PDO::FETCH_ASSOC);
+        if ($currentNote && !empty($currentNote['doctor_name'])) {
+            $currentDoctor = $currentNote['doctor_name'];
+        }
+    }
+    
+    // If no specific note provided or doctor not found, get latest note's doctor
+    if (empty($currentDoctor)) {
+        $stmt = $pdo->prepare("
+            SELECT doctor_name 
+            FROM consultation_notes 
+            WHERE patient_id = ? 
+            ORDER BY consultation_date DESC, created_at DESC 
+            LIMIT 1
+        ");
+        $stmt->execute([$patientId]);
+        $latestNote = $stmt->fetch(PDO::FETCH_ASSOC);
+        if ($latestNote && !empty($latestNote['doctor_name'])) {
+            $currentDoctor = $latestNote['doctor_name'];
+        }
+    }
+    
+    // Fallback to staff name if no doctor found in notes
+    if (empty($currentDoctor)) {
+        $currentDoctor = $_SESSION['user']['full_name'] ?? 'Dr. Medical Officer';
+    }
+    
+    // Get consultation notes (for internal use only, not displayed in print)
+    $stmt = $pdo->prepare("
+        SELECT 
+            cn.*,
+            u.full_name as created_by_name
+        FROM consultation_notes cn
+        LEFT JOIN sitio1_users u ON cn.created_by = u.id
+        WHERE cn.patient_id = ?
+        ORDER BY cn.consultation_date DESC, cn.created_at DESC
+    ");
+    $stmt->execute([$patientId]);
+    $consultationNotes = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    
     // Get visit history
     $visits = [];
     try {
@@ -82,9 +132,6 @@ $dateOfBirthDisplay = '';
 if (!empty($patient['display_date_of_birth'])) {
     $dateOfBirthDisplay = date('F j, Y', strtotime($patient['display_date_of_birth']));
 }
-
-// Get attending physician name from session
-$attendingPhysician = $_SESSION['user']['full_name'] ?? 'Dr. Medical Officer';
 
 // Get BHW Assigned from patient table
 $bhwAssigned = !empty($patient['bhw_assigned']) ? $patient['bhw_assigned'] : 'Not Assigned';
@@ -316,6 +363,18 @@ ob_start();
             border-bottom: 1px solid #000;
             margin: 40px 0 8px;
             padding-bottom: 4px;
+            min-height: 30px;
+            position: relative;
+        }
+        
+        .signature-name {
+            position: absolute;
+            bottom: 5px;
+            left: 0;
+            right: 0;
+            text-align: center;
+            font-weight: 600;
+            font-size: 11pt;
         }
         
         .signature-label {
@@ -553,9 +612,12 @@ ob_start();
             <?php if (!empty($patient['unique_number'])): ?>
             <p><strong>Unique Number:</strong> <?= htmlspecialchars($patient['unique_number']) ?></p>
             <?php endif; ?>
+            <?php if ($noteId > 0): ?>
+            <p><strong>Consultation Note Reference:</strong> Note #<?= $noteId ?></p>
+            <?php endif; ?>
         </div>
         
-        <!-- Personal Information Section - ADDED ALL MISSING FIELDS -->
+        <!-- Personal Information Section -->
         <div class="section">
             <div class="section-title">I. PERSONAL INFORMATION</div>
             <table class="info-table">
@@ -595,7 +657,6 @@ ob_start();
                     <th>Complete Address</th>
                     <td colspan="3" class="data-value"><?= $patient['display_address'] ? htmlspecialchars($patient['display_address']) : '<span class="empty-data">Not specified</span>' ?></td>
                 </tr>
-                <!-- ADDED MISSING FIELDS -->
                 <tr>
                     <th>PHIC Number</th>
                     <td class="data-value"><?= !empty($patient['phic_no']) ? htmlspecialchars($patient['phic_no']) : '<span class="empty-data">Not specified</span>' ?></td>
@@ -732,12 +793,12 @@ ob_start();
         </div>
         <?php endif; ?>
         
-        <!-- Signature Section - UPDATED WITH NAMES ON SIGNATURE LINES -->
+        <!-- Signature Section - UPDATED TO SHOW CURRENT DOCTOR ONLY -->
         <div class="signature-section">
             <div class="signature-box">
-                <div class="signature-line" style="position: relative;">
-                    <div style="position: absolute; bottom: 5px; left: 0; right: 0; text-align: center; font-weight: 600; font-size: 11pt;">
-                        <?= htmlspecialchars($attendingPhysician) ?>
+                <div class="signature-line">
+                    <div class="signature-name">
+                        <?= htmlspecialchars($currentDoctor) ?>
                     </div>
                 </div>
                 <div class="signature-label">ATTENDING PHYSICIAN/MEDICAL STAFF</div>
@@ -748,8 +809,8 @@ ob_start();
             </div>
             
             <div class="signature-box">
-                <div class="signature-line" style="position: relative;">
-                    <div style="position: absolute; bottom: 5px; left: 0; right: 0; text-align: center; font-weight: 600; font-size: 11pt;">
+                <div class="signature-line">
+                    <div class="signature-name">
                         <?= htmlspecialchars($bhwAssigned) ?>
                     </div>
                 </div>
@@ -821,7 +882,7 @@ ob_start();
                     // Create workbook
                     const wb = XLSX.utils.book_new();
                     
-                    // Patient Information Sheet - UPDATED WITH ALL FIELDS
+                    // Patient Information Sheet
                     const patientData = [
                         ['BARANGAY LUZ HEALTH CENTER - PATIENT HEALTH RECORD'],
                         ['Official Document - Generated on: <?= date('F j, Y, g:i a') ?>'],
@@ -859,8 +920,11 @@ ob_start();
                         ['Chronic Conditions:', '<?= isset($healthInfo['chronic_conditions']) ? addslashes($healthInfo['chronic_conditions']) : 'None reported' ?>'],
                         ['Health Record Updated:', '<?= $patient['updated_at'] ? date('F j, Y \a\t g:i A', strtotime($patient['updated_at'])) : ($patient['created_at'] ? date('F j, Y \a\t g:i A', strtotime($patient['created_at'])) : 'Not recorded') ?>'],
                         [''],
+                        ['CURRENT CONSULTATION INFORMATION'],
+                        ['Attending Physician:', '<?= addslashes($currentDoctor) ?>'],
+                        [''],
                         ['SIGNATURES'],
-                        ['Attending Physician:', '<?= addslashes($attendingPhysician) ?>'],
+                        ['Attending Physician:', '<?= addslashes($currentDoctor) ?>'],
                         ['License No:', '<?= $staffLicenseNo ?>'],
                         ['Barangay Health Worker:', '<?= addslashes($bhwAssigned) ?>'],
                         ['BHW ID:', 'BHW-LUZ-<?= $bhwInitials ?>-<?= date('Y') ?>-<?= str_pad($patientId, 4, '0', STR_PAD_LEFT) ?>'],

@@ -1,4 +1,3 @@
-
 <?php
 
 require_once __DIR__ . '/../includes/auth.php';
@@ -65,227 +64,180 @@ function sendAccountStatusEmail($email, $status, $message = '', $uniqueNumber = 
         $mail->isHTML(true);
         
         if ($status === 'approved') {
-
-$mail->Subject = 'Barangay Luz Health Monitoring and Tracking System';
-$mail->Body = '
-<!DOCTYPE html>
-<html>
-<body style="margin:0; padding:0; background-color:#ffffff; font-family: Arial, Helvetica, sans-serif;">
-
-<table width="100%" cellpadding="0" cellspacing="0" style="background-color:#ffffff;">
-<tr>
-<td align="center">
-
-<table width="600" cellpadding="0" cellspacing="0" style="border:1px solid #e5e7eb; border-radius:10px; overflow:hidden;">
-
-<!-- Header -->
-<tr>
-<td style="background-color:#2563eb; padding:30px; text-align:center;">
-    <div style="font-size:26px; font-weight:bold; color:#ffffff;">
-        <img src="/asssets/images/Luz.jpg" style="width: 100px; height: auto; margin-right: 10px;">
-            Barangay Luz Health Monitoring and Tracking
-    </div>
-    <div style="margin-top:8px; font-size:16px; color:#dbeafe;">
-        Account Approval Notice
-    </div>
-</td>
-</tr>
-
-<!-- Content -->
-<tr>
-<td style="padding:30px; color:#1f2937; font-size:15px; line-height:1.7;">
-
-<p>Hello, </p>
-
-<p>
-We are happy to inform you that your registration has been
-<strong style="color:#2563eb;">successfully approved</strong>.
-Your account is now active and ready for use.
-</p>
-
-<!-- Unique Number -->
-<div style="
-    background-color:#eff6ff;
-    border:1px solid #3b82f6;
-    border-radius:8px;
-    padding:16px;
-    text-align:center;
-    margin:25px 0;
-">
-    <div style="font-size:13px; color:#2563eb; margin-bottom:6px;">
-        Your Unique Identification Number
-    </div>
-    <div style="font-size:22px; font-weight:bold; letter-spacing:1px; color:#1e3a8a;">
-        ' . $uniqueNumber . '
-    </div>
-</div>
-
-<p>
-Please keep this number secure. It will be used for appointments,
-medical records, and identity verification.
-</p>
-
-<ul style="padding-left:18px;">
-    <li>Book healthcare appointments</li>
-    <li>View medical history</li>
-    <li>Receive health updates</li>
-</ul>
-
-<!-- Button -->
-<div style="text-align:center; margin-top:30px;">
-    <a href="https://your-health-portal.com/login"
-       style="
-        background-color:#3b82f6;
-        color:#ffffff;
-        text-decoration:none;
-        padding:14px 28px;
-        border-radius:6px;
-        font-size:15px;
-        display:inline-block;
-       ">
-        Access Your Account
-    </a>
-</div>
-
-<p style="margin-top:30px;">
-Thank you for trusting <strong>Barangay Luz Health Monitoring and Tracking Platform</strong> with your healthcare needs.
-</p>
-
-<p>
-Warm regards,<br>
-<strong>The Barangay Luz Health Center Team</strong>
-</p>
-
-</td>
-</tr>
-
-<!-- Footer -->
-<tr>
-<td style="
-    background-color:#f8fafc;
-    padding:20px;
-    text-align:center;
-    font-size:12px;
-    color:#6b7280;
-    border-top:1px solid #e5e7eb;
-">
-This is an automated message. Please do not reply.<br>
-© ' . date('Y') . ' Barangay Luz Health Monitoring and Tracking System
-</td>
-</tr>
-
-</table>
-
-</td>
-</tr>
-</table>
-
-</body>
-</html>
-';
-}
- else {
-
-$mail->Subject = 'Account Registration Update – Barangay Luz Health Monitoring and Tracking System';
-$mail->Body = '
-<!DOCTYPE html>
-<html>
-<body style="margin:0; padding:0; background-color:#ffffff; font-family: Arial, Helvetica, sans-serif;">
-
-<table width="100%" cellpadding="0" cellspacing="0">
-<tr>
-<td align="center">
-
-<table width="600" cellpadding="0" cellspacing="0" style="border:1px solid #e5e7eb; border-radius:10px;">
-
-<!-- Header -->
-<tr>
-<td style="background-color:#3b82f6; padding:30px; text-align:center;">
-    <div style="font-size:26px; font-weight:bold; color:#ffffff;">
-        🏥 Barangay Luz Health Monitoring and Tracking System
-    </div>
-    <div style="margin-top:8px; font-size:16px; color:#dbeafe;">
-        Registration Status Update
-    </div>
-</td>
-</tr>
-
-<!-- Content -->
-<tr>
-<td style="padding:30px; color:#1f2937; font-size:15px; line-height:1.7;">
-
-<p>Hello,</p>
-
-<p>
-Thank you for submitting your registration. After careful review,
-we are unable to approve your account at this time.
-</p>
-
-<!-- Reason -->
-<div style="
-    background-color:#f8fafc;
-    border-left:4px solid #3b82f6;
-    padding:15px;
-    margin:20px 0;
-">
-    <strong>Reason Provided:</strong><br>
-    ' . htmlspecialchars($message) . '
-</div>
-
-<p>
-You may reapply or contact our support team if you believe this decision
-requires further review.
-</p>
-
-<div style="
-    background-color:#eff6ff;
-    padding:15px;
-    border-radius:8px;
-    margin:25px 0;
-">
-    <strong>Support Contact</strong><br>
-    📞 (02) 8-123-4567<br>
-    ✉️ support@communityhealthtracker.ph
-</div>
-
-<p>
-We appreciate your understanding and interest in our services.
-</p>
-
-<p>
-Sincerely,<br>
-<strong>The Barangay Luz Health Monitoring and Tracking System Team</strong>
-</p>
-
-</td>
-</tr>
-
-<!-- Footer -->
-<tr>
-<td style="
-    background-color:#f8fafc;
-    padding:20px;
-    text-align:center;
-    font-size:12px;
-    color:#6b7280;
-    border-top:1px solid #e5e7eb;
-">
-This is an automated message. Please do not reply.<br>
-© ' . date('Y') . ' Barangay Luz Health Monitoring and Tracking System
-</td>
-</tr>
-
-</table>
-
-</td>
-</tr>
-</table>
-
-</body>
-</html>
-';
-}
-
+            $mail->Subject = 'Barangay Luz Health Monitoring and Tracking System';
+            $mail->Body = '
+            <!DOCTYPE html>
+            <html>
+            <body style="margin:0; padding:0; background-color:#ffffff; font-family: Arial, Helvetica, sans-serif;">
+            <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#ffffff;">
+            <tr>
+            <td align="center">
+            <table width="600" cellpadding="0" cellspacing="0" style="border:1px solid #e5e7eb; border-radius:10px; overflow:hidden;">
+            <tr>
+            <td style="background-color:#2563eb; padding:30px; text-align:center;">
+                <div style="font-size:26px; font-weight:bold; color:#ffffff;">
+                    <img src="/asssets/images/Luz.jpg" style="width: 100px; height: auto; margin-right: 10px;">
+                    Barangay Luz Health Monitoring and Tracking
+                </div>
+                <div style="margin-top:8px; font-size:16px; color:#dbeafe;">
+                    Account Approval Notice
+                </div>
+            </td>
+            </tr>
+            <tr>
+            <td style="padding:30px; color:#1f2937; font-size:15px; line-height:1.7;">
+            <p>Hello, </p>
+            <p>
+            We are happy to inform you that your registration has been
+            <strong style="color:#2563eb;">successfully approved</strong>.
+            Your account is now active and ready for use.
+            </p>
+            <div style="
+                background-color:#eff6ff;
+                border:1px solid #3b82f6;
+                border-radius:8px;
+                padding:16px;
+                text-align:center;
+                margin:25px 0;
+            ">
+                <div style="font-size:13px; color:#2563eb; margin-bottom:6px;">
+                    Your Unique Identification Number
+                </div>
+                <div style="font-size:22px; font-weight:bold; letter-spacing:1px; color:#1e3a8a;">
+                    ' . $uniqueNumber . '
+                </div>
+            </div>
+            <p>
+            Please keep this number secure. It will be used for medical records and identity verification.
+            </p>
+            <ul style="padding-left:18px;">
+                <li>View medical history</li>
+                <li>Receive health updates</li>
+                <li>Access health services</li>
+            </ul>
+            <div style="text-align:center; margin-top:30px;">
+                <a href="https://your-health-portal.com/login"
+                   style="
+                    background-color:#3b82f6;
+                    color:#ffffff;
+                    text-decoration:none;
+                    padding:14px 28px;
+                    border-radius:6px;
+                    font-size:15px;
+                    display:inline-block;
+                   ">
+                    Access Your Account
+                </a>
+            </div>
+            <p style="margin-top:30px;">
+            Thank you for trusting <strong>Barangay Luz Health Monitoring and Tracking Platform</strong> with your healthcare needs.
+            </p>
+            <p>
+            Warm regards,<br>
+            <strong>The Barangay Luz Health Center Team</strong>
+            </p>
+            </td>
+            </tr>
+            <tr>
+            <td style="
+                background-color:#f8fafc;
+                padding:20px;
+                text-align:center;
+                font-size:12px;
+                color:#6b7280;
+                border-top:1px solid #e5e7eb;
+            ">
+            This is an automated message. Please do not reply.<br>
+            © ' . date('Y') . ' Barangay Luz Health Monitoring and Tracking System
+            </td>
+            </tr>
+            </table>
+            </td>
+            </tr>
+            </table>
+            </body>
+            </html>
+            ';
+        } else {
+            $mail->Subject = 'Account Registration Update – Barangay Luz Health Monitoring and Tracking System';
+            $mail->Body = '
+            <!DOCTYPE html>
+            <html>
+            <body style="margin:0; padding:0; background-color:#ffffff; font-family: Arial, Helvetica, sans-serif;">
+            <table width="100%" cellpadding="0" cellspacing="0">
+            <tr>
+            <td align="center">
+            <table width="600" cellpadding="0" cellspacing="0" style="border:1px solid #e5e7eb; border-radius:10px;">
+            <tr>
+            <td style="background-color:#3b82f6; padding:30px; text-align:center;">
+                <div style="font-size:26px; font-weight:bold; color:#ffffff;">
+                    🏥 Barangay Luz Health Monitoring and Tracking System
+                </div>
+                <div style="margin-top:8px; font-size:16px; color:#dbeafe;">
+                    Registration Status Update
+                </div>
+            </td>
+            </tr>
+            <tr>
+            <td style="padding:30px; color:#1f2937; font-size:15px; line-height:1.7;">
+            <p>Hello,</p>
+            <p>
+            Thank you for submitting your registration. After careful review,
+            we are unable to approve your account at this time.
+            </p>
+            <div style="
+                background-color:#f8fafc;
+                border-left:4px solid #3b82f6;
+                padding:15px;
+                margin:20px 0;
+            ">
+                <strong>Reason Provided:</strong><br>
+                ' . htmlspecialchars($message) . '
+            </div>
+            <p>
+            You may reapply or contact our support team if you believe this decision
+            requires further review.
+            </p>
+            <div style="
+                background-color:#eff6ff;
+                padding:15px;
+                border-radius:8px;
+                margin:25px 0;
+            ">
+                <strong>Support Contact</strong><br>
+                📞 (02) 8-123-4567<br>
+                ✉️ support@communityhealthtracker.ph
+            </div>
+            <p>
+            We appreciate your understanding and interest in our services.
+            </p>
+            <p>
+            Sincerely,<br>
+            <strong>The Barangay Luz Health Monitoring and Tracking System Team</strong>
+            </p>
+            </td>
+            </tr>
+            <tr>
+            <td style="
+                background-color:#f8fafc;
+                padding:20px;
+                text-align:center;
+                font-size:12px;
+                color:#6b7280;
+                border-top:1px solid #e5e7eb;
+            ">
+            This is an automated message. Please do not reply.<br>
+            © ' . date('Y') . ' Barangay Luz Health Monitoring and Tracking System
+            </td>
+            </tr>
+            </table>
+            </td>
+            </tr>
+            </table>
+            </body>
+            </html>
+            ';
+        }
 
         $mail->send();
         return true;
@@ -357,12 +309,9 @@ function isIdValidForVerification($idType) {
 // Get stats for dashboard
 $stats = [
     'total_patients' => 0,
-    'consultations' => 0,
     'unapproved_users' => 0
 ];
 
-// Staff ID
-$staffId = $_SESSION['user']['id'];
 $error = '';
 $success = '';
 
@@ -433,28 +382,17 @@ if (isset($_SESSION['success_message'])) {
 // Get active tab from URL parameter
 $activeTab = $_GET['tab'] ?? 'analytics';
 
-// Get data for dashboard and analytics
+// Get data for dashboard
 try {
     // Basic stats
-    $stmt = $pdo->prepare("SELECT COUNT(*) FROM sitio1_patients WHERE added_by = ?");
-    $stmt->execute([$_SESSION['user']['id']]);
+    $stmt = $pdo->query("SELECT COUNT(*) FROM sitio1_users WHERE role = 'patient'");
     $stats['total_patients'] = $stmt->fetchColumn();
-
-    // Get total consultations
-    $stmt = $pdo->query("SELECT COUNT(*) FROM sitio1_consultations");
-    $stats['consultations'] = $stmt->fetchColumn();
 
     $stmt = $pdo->query("SELECT COUNT(*) FROM sitio1_users WHERE approved = FALSE AND (status IS NULL OR status != 'declined')");
     $stats['unapproved_users'] = $stmt->fetchColumn();
     
     // Analytics data for charts
     $analytics = [];
-    
-    // Initialize all keys with default values
-    $analytics['appointments_total'] = 0;
-    $analytics['completed_appointments'] = 0;
-    $analytics['cancelled_appointments'] = 0;
-    $analytics['missed_appointments'] = 0;
     
     // Total registered patients
     $stmt = $pdo->query("SELECT COUNT(*) as total FROM sitio1_users WHERE role = 'patient'");
@@ -463,55 +401,6 @@ try {
     // Approved patients
     $stmt = $pdo->query("SELECT COUNT(*) as total FROM sitio1_users WHERE role = 'patient' AND approved = TRUE");
     $analytics['approved_patients'] = $stmt->fetch(PDO::FETCH_ASSOC)['total'];
-    
-    // Regular patients (patients with more than 1 appointment)
-    $stmt = $pdo->query("
-        SELECT COUNT(DISTINCT u.id) as total 
-        FROM sitio1_users u 
-        JOIN user_appointments ua ON u.id = ua.user_id 
-        WHERE u.role = 'patient' 
-        GROUP BY u.id 
-        HAVING COUNT(ua.id) > 1
-    ");
-    $regularPatientsResult = $stmt->fetchAll(PDO::FETCH_ASSOC);
-    $analytics['regular_patients'] = count($regularPatientsResult);
-    
-    // Appointment status distribution
-    $stmt = $pdo->prepare("
-        SELECT status, COUNT(*) as count 
-        FROM user_appointments ua
-        JOIN sitio1_appointments a ON ua.appointment_id = a.id
-        WHERE a.staff_id = ?
-        GROUP BY status
-    ");
-    $stmt->execute([$staffId]);
-    $appointmentStatusData = $stmt->fetchAll(PDO::FETCH_ASSOC);
-    $analytics['appointment_status'] = $appointmentStatusData;
-    
-    // Calculate appointment counts
-    foreach ($appointmentStatusData as $item) {
-        if ($item['status'] === 'completed') {
-            $analytics['completed_appointments'] = $item['count'];
-        } elseif ($item['status'] === 'cancelled') {
-            $analytics['cancelled_appointments'] = $item['count'];
-        } elseif ($item['status'] === 'missed') {
-            $analytics['missed_appointments'] = $item['count'];
-        }
-    }
-    
-    // Monthly appointments trend (last 6 months)
-    $stmt = $pdo->prepare("
-        SELECT 
-            DATE_FORMAT(ua.created_at, '%Y-%m') as month,
-            COUNT(*) as count
-        FROM user_appointments ua
-        JOIN sitio1_appointments a ON ua.appointment_id = a.id
-        WHERE a.staff_id = ? AND ua.created_at >= DATE_SUB(NOW(), INTERVAL 6 MONTH)
-        GROUP BY DATE_FORMAT(ua.created_at, '%Y-%m')
-        ORDER BY month
-    ");
-    $stmt->execute([$staffId]);
-    $analytics['monthly_trend'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
     
     // Patient registration trend (last 6 months)
     $stmt = $pdo->query("
@@ -525,26 +414,55 @@ try {
     ");
     $analytics['patient_registration_trend'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
     
-    // Get total appointments count
-    $stmt = $pdo->prepare("
-        SELECT COUNT(*) as total 
-        FROM user_appointments ua
-        JOIN sitio1_appointments a ON ua.appointment_id = a.id
-        WHERE a.staff_id = ?
+    // Get approval statistics
+    $stmt = $pdo->query("SELECT COUNT(*) as total FROM sitio1_users WHERE role = 'patient' AND approved = TRUE");
+    $analytics['approved_count'] = $stmt->fetch(PDO::FETCH_ASSOC)['total'];
+    
+    $stmt = $pdo->query("SELECT COUNT(*) as total FROM sitio1_users WHERE role = 'patient' AND (approved = FALSE OR status = 'declined')");
+    $analytics['pending_declined_count'] = $stmt->fetch(PDO::FETCH_ASSOC)['total'];
+    
+    $stmt = $pdo->query("SELECT COUNT(*) as total FROM sitio1_users WHERE role = 'patient' AND approved = FALSE AND (status IS NULL OR status != 'declined')");
+    $analytics['pending_count'] = $stmt->fetch(PDO::FETCH_ASSOC)['total'];
+    
+    // Calculate approval rate
+    $analytics['approval_rate'] = $analytics['total_patients'] > 0 ? 
+        round(($analytics['approved_count'] / $analytics['total_patients']) * 100) : 0;
+    
+    // Get user distribution by gender
+    $stmt = $pdo->query("
+        SELECT gender, COUNT(*) as count 
+        FROM sitio1_users 
+        WHERE role = 'patient' AND gender IS NOT NULL AND gender != ''
+        GROUP BY gender
     ");
-    $stmt->execute([$staffId]);
-    $appointmentsTotalResult = $stmt->fetch(PDO::FETCH_ASSOC);
-    $analytics['appointments_total'] = $appointmentsTotalResult['total'] ?? 0;
+    $analytics['gender_distribution'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
     
-    // Calculate completion rate safely
-    $analytics['completion_rate'] = $analytics['appointments_total'] > 0 ? 
-        round(($analytics['completed_appointments'] / $analytics['appointments_total']) * 100) : 0;
-    
-    $analytics['cancellation_rate'] = $analytics['appointments_total'] > 0 ? 
-        round(($analytics['cancelled_appointments'] / $analytics['appointments_total']) * 100) : 0;
-    
-    $analytics['missed_rate'] = $analytics['appointments_total'] > 0 ? 
-        round(($analytics['missed_appointments'] / $analytics['appointments_total']) * 100) : 0;
+    // Get user distribution by age group
+    $stmt = $pdo->query("
+        SELECT 
+            CASE 
+                WHEN age < 18 THEN 'Under 18'
+                WHEN age BETWEEN 18 AND 30 THEN '18-30'
+                WHEN age BETWEEN 31 AND 45 THEN '31-45'
+                WHEN age BETWEEN 46 AND 60 THEN '46-60'
+                WHEN age > 60 THEN 'Over 60'
+                ELSE 'Unknown'
+            END as age_group,
+            COUNT(*) as count
+        FROM sitio1_users 
+        WHERE role = 'patient'
+        GROUP BY age_group
+        ORDER BY 
+            CASE age_group
+                WHEN 'Under 18' THEN 1
+                WHEN '18-30' THEN 2
+                WHEN '31-45' THEN 3
+                WHEN '46-60' THEN 4
+                WHEN 'Over 60' THEN 5
+                ELSE 6
+            END
+    ");
+    $analytics['age_distribution'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
     
     // Get unapproved users with pagination and automatically check ID type
     $usersPerPage = 5;
@@ -594,19 +512,15 @@ try {
     $error = 'Error fetching data: ' . $e->getMessage();
     // Initialize analytics array with default values on error
     $analytics = [
-        'appointments_total' => 0,
-        'completed_appointments' => 0,
-        'cancelled_appointments' => 0,
-        'missed_appointments' => 0,
         'total_patients' => 0,
         'approved_patients' => 0,
-        'regular_patients' => 0,
-        'appointment_status' => [],
-        'monthly_trend' => [],
         'patient_registration_trend' => [],
-        'completion_rate' => 0,
-        'cancellation_rate' => 0,
-        'missed_rate' => 0
+        'approved_count' => 0,
+        'pending_declined_count' => 0,
+        'pending_count' => 0,
+        'approval_rate' => 0,
+        'gender_distribution' => [],
+        'age_distribution' => []
     ];
 }
 
@@ -625,7 +539,7 @@ $recordsPerPage = 5;
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-        /* Enhanced Modal Styles - Centered and Consistent */
+        /* Enhanced Modal Styles */
         .modal-overlay {
             position: fixed;
             top: 0;
@@ -679,7 +593,7 @@ $recordsPerPage = 5;
             padding: 0 24px 24px 24px;
         }
         
-        /* Action Modal - Centered Success/Error Messages */
+        /* Action Modal */
         .action-modal {
             max-width: 400px;
         }
@@ -710,44 +624,15 @@ $recordsPerPage = 5;
             color: #dc2626;
         }
         
-        .action-modal-info .action-modal-icon {
-            background: #dbeafe;
-            color: #3b82f6;
-        }
-        
-        .action-modal-title {
-            font-size: 20px;
-            font-weight: 600;
-            color: #1f2937;
-            margin-bottom: 12px;
-        }
-        
-        .action-modal-message {
-            font-size: 15px;
-            color: #6b7280;
-            line-height: 1.5;
-        }
-        
-        /* Other styles remain the same as before */
-        .fixed {
-            position: fixed;
-        }
-        .inset-0 {
-            top: 0;
-            right: 0;
-            bottom: 0;
-            left: 0;
-        }
         .hidden {
             display: none;
         }
-        .z-50 {
-            z-index: 50;
-        }
+        
         .tab-active {
             border-bottom: 2px solid #3C96E1;
             color: #3C96E1;
         }
+        
         .count-badge {
             display: inline-flex;
             align-items: center;
@@ -760,89 +645,80 @@ $recordsPerPage = 5;
             padding: 0 0.6rem;
             margin-left: 0.5rem;
         }
-        .action-button {
-            border-radius: 9999px !important;
-            padding: 12px 24px !important;
-            font-weight: 600 !important;
-            font-size: 16px !important;
-            transition: all 0.3s ease !important;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1) !important;
-        }
-        .action-button:hover {
-            transform: translateY(-3px) !important;
-            box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15) !important;
-        }
-        .action-button:active {
-            transform: translateY(-1px) !important;
-        }
         
-        /* Button disabled state */
-        .button-disabled {
-            opacity: 0.6;
-            cursor: not-allowed !important;
-            background-color: #9ca3af !important;
-        }
-        .button-disabled:hover {
-            transform: none !important;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1) !important;
-        }
-
-        /* Updated button styles for Edit and Delete */
-        .btn-edit {
-            background-color: #3C96E1 !important;
+        /* Button styles */
+        .btn-blue {
+            background: #3C96E1 !important;
             color: white !important;
             border-radius: 9999px !important;
-            padding: 8px 16px !important;
-            font-weight: 500 !important;
+            padding: 10px 20px !important;
+            font-weight: 600 !important;
             font-size: 14px !important;
             transition: all 0.3s ease !important;
             border: none !important;
             box-shadow: 0 2px 4px rgba(60, 150, 225, 0.3) !important;
         }
-
-        .btn-edit:hover {
-            background-color: #2a7bc8 !important;
+        
+        .btn-blue:hover {
+            background: #2a7bc8 !important;
             transform: translateY(-2px) !important;
             box-shadow: 0 4px 8px rgba(60, 150, 225, 0.4) !important;
         }
-
-        .btn-delete {
-            background-color: #ef4444 !important;
+        
+        .btn-success-blue {
+            background: #48BB78 !important;
             color: white !important;
             border-radius: 9999px !important;
-            padding: 8px 16px !important;
-            font-weight: 500 !important;
+            padding: 10px 20px !important;
+            font-weight: 600 !important;
             font-size: 14px !important;
             transition: all 0.3s ease !important;
             border: none !important;
-            box-shadow: 0 2px 4px rgba(239, 68, 68, 0.3) !important;
+            box-shadow: 0 2px 4px rgba(72, 187, 120, 0.3) !important;
         }
-
-        .btn-delete:hover {
-            background-color: #dc2626 !important;
+        
+        .btn-success-blue:hover {
+            background: #38A169 !important;
             transform: translateY(-2px) !important;
-            box-shadow: 0 4px 8px rgba(239, 68, 68, 0.4) !important;
+            box-shadow: 0 4px 8px rgba(72, 187, 120, 0.4) !important;
         }
-
-        /* Updated button style for View Details */
+        
+        .btn-danger-blue {
+            background: #F56565 !important;
+            color: white !important;
+            border-radius: 9999px !important;
+            padding: 10px 20px !important;
+            font-weight: 600 !important;
+            font-size: 14px !important;
+            transition: all 0.3s ease !important;
+            border: none !important;
+            box-shadow: 0 2px 4px rgba(245, 101, 101, 0.3) !important;
+        }
+        
+        .btn-danger-blue:hover {
+            background: #E53E3E !important;
+            transform: translateY(-2px) !important;
+            box-shadow: 0 4px 8px rgba(245, 101, 101, 0.4) !important;
+        }
+        
         .btn-view-details {
             background-color: #3C96E1 !important;
             color: white !important;
             border-radius: 9999px !important;
-            padding: 16px 24px !important;
-            font-weight: 600 !important;
+            padding: 8px 16px !important;
+            font-weight: 500 !important;
             font-size: 14px !important;
             transition: all 0.3s ease !important;
             border: none !important;
             box-shadow: 0 2px 4px rgba(60, 150, 225, 0.3) !important;
         }
-
+        
         .btn-view-details:hover {
             background-color: #2a7bc8 !important;
             transform: translateY(-2px) !important;
             box-shadow: 0 4px 8px rgba(60, 150, 225, 0.4) !important;
         }
-
+        
         /* Pagination Styles */
         .pagination {
             display: flex;
@@ -851,7 +727,7 @@ $recordsPerPage = 5;
             margin-top: 20px;
             gap: 8px;
         }
-
+        
         .pagination-button {
             display: inline-flex;
             align-items: center;
@@ -867,35 +743,28 @@ $recordsPerPage = 5;
             color: #374151;
             text-decoration: none;
         }
-
+        
         .pagination-button:hover {
             background: #3C96E1;
             color: white;
             border-color: #3C96E1;
             transform: translateY(-1px);
         }
-
+        
         .pagination-button.active {
             background: #3C96E1;
             color: white;
             border-color: #3C96E1;
         }
-
+        
         .pagination-button.disabled {
             opacity: 0.5;
             cursor: not-allowed;
             background: #f3f4f6;
             color: #9ca3af;
         }
-
-        .pagination-button.disabled:hover {
-            background: #f3f4f6;
-            color: #9ca3af;
-            border-color: #d1d5db;
-            transform: none;
-        }
-
-        /* Enhanced Tab Button Styles with Blue Theme */
+        
+        /* Tab Button Styles */
         .nav-tab-button {
             display: inline-flex;
             align-items: center;
@@ -914,13 +783,13 @@ $recordsPerPage = 5;
             background: #3C96E1;
             color: white;
         }
-
+        
         .nav-tab-button:hover {
             transform: translateY(-2px);
             box-shadow: 0 4px 8px rgba(60, 150, 225, 0.3);
             background: #2a7bc8;
         }
-
+        
         .nav-tab-button.active {
             transform: translateY(-2px);
             box-shadow: 0 4px 12px rgba(60, 150, 225, 0.4);
@@ -928,12 +797,12 @@ $recordsPerPage = 5;
             color: #3C96E1;
             border: 2px solid #3C96E1;
         }
-
+        
         .nav-tab-button i {
             margin-right: 8px;
             font-size: 18px;
         }
-
+        
         .nav-tab-button .count-badge {
             margin-left: 8px;
             font-size: 0.8rem;
@@ -942,308 +811,13 @@ $recordsPerPage = 5;
             background: rgba(255, 255, 255, 0.3);
             color: white;
         }
-
+        
         .nav-tab-button.active .count-badge {
             background: #3C96E1;
             color: white;
         }
-
-        /* Account Approvals Tab Button */
-        .tab-account-management {
-            background: #3C96E1;
-            color: white;
-        }
-
-        .tab-account-management:hover {
-            background: #2a7bc8;
-        }
-
-        .tab-account-management.active {
-            background: white;
-            color: #3C96E1;
-            border: 2px solid #3C96E1;
-            box-shadow: 0 4px 12px rgba(60, 150, 225, 0.4);
-        }
-
-        /* Analytics Dashboard Tab Button */
-        .tab-analytics {
-            background: #3C96E1;
-            color: white;
-        }
-
-        .tab-analytics:hover {
-            background: #2a7bc8;
-        }
-
-        .tab-analytics.active {
-            background: white;
-            color: #3C96E1;
-            border: 2px solid #3C96E1;
-            box-shadow: 0 4px 12px rgba(60, 150, 225, 0.4);
-        }
-
-        /* Blue action buttons */
-        .btn-blue {
-            background: #3C96E1 !important;
-            color: white !important;
-            border-radius: 9999px !important;
-            padding: 10px 20px !important;
-            font-weight: 600 !important;
-            font-size: 14px !important;
-            transition: all 0.3s ease !important;
-            border: none !important;
-            box-shadow: 0 2px 4px rgba(60, 150, 225, 0.3) !important;
-        }
-
-        .btn-blue:hover {
-            background: #2a7bc8 !important;
-            transform: translateY(-2px) !important;
-            box-shadow: 0 4px 8px rgba(60, 150, 225, 0.4) !important;
-        }
-
-        .btn-blue:active {
-            transform: translateY(-1px) !important;
-        }
-
-        /* New Approve and Decline Button Styles with White Background */
-        .btn-approve-white {
-            background: white !important;
-            color: #3C96E1 !important;
-            border-radius: 9999px !important;
-            padding: 10px 20px !important;
-            font-weight: 600 !important;
-            font-size: 14px !important;
-            transition: all 0.3s ease !important;
-            border: 2px solid #3C96E1 !important;
-            box-shadow: 0 2px 4px rgba(60, 150, 225, 0.1) !important;
-        }
-
-        .btn-approve-white:hover {
-            background: #3C96E1 !important;
-            color: white !important;
-            transform: translateY(-2px) !important;
-            box-shadow: 0 4px 8px rgba(60, 150, 225, 0.3) !important;
-        }
-
-        .btn-decline-white {
-            background: white !important;
-            color: #EF4444 !important;
-            border-radius: 9999px !important;
-            padding: 10px 20px !important;
-            font-weight: 600 !important;
-            font-size: 14px !important;
-            transition: all 0.3s ease !important;
-            border: 2px solid #EF4444 !important;
-            box-shadow: 0 2px 4px rgba(239, 68, 68, 0.1) !important;
-        }
-
-        .btn-decline-white:hover {
-            background: #EF4444 !important;
-            color: white !important;
-            transform: translateY(-2px) !important;
-            box-shadow: 0 4px 8px rgba(239, 68, 68, 0.3) !important;
-        }
-
-        /* Success button in blue theme */
-        .btn-success-blue {
-            background: #48BB78 !important;
-            color: white !important;
-            border-radius: 9999px !important;
-            padding: 10px 20px !important;
-            font-weight: 600 !important;
-            font-size: 14px !important;
-            transition: all 0.3s ease !important;
-            border: none !important;
-            box-shadow: 0 2px 4px rgba(72, 187, 120, 0.3) !important;
-        }
-
-        .btn-success-blue:hover {
-            background: #38A169 !important;
-            transform: translateY(-2px) !important;
-            box-shadow: 0 4px 8px rgba(72, 187, 120, 0.4) !important;
-        }
-
-        /* Warning button in blue theme */
-        .btn-warning-blue {
-            background: #ED8936 !important;
-            color: white !important;
-            border-radius: 9999px !important;
-            padding: 10px 20px !important;
-            font-weight: 600 !important;
-            font-size: 14px !important;
-            transition: all 0.3s ease !important;
-            border: none !important;
-            box-shadow: 0 2px 4px rgba(237, 137, 54, 0.3) !important;
-        }
-
-        .btn-warning-blue:hover {
-            background: #DD6B20 !important;
-            transform: translateY(-2px) !important;
-            box-shadow: 0 4px 8px rgba(237, 137, 54, 0.4) !important;
-        }
-
-        /* Danger button in blue theme */
-        .btn-danger-blue {
-            background: #F56565 !important;
-            color: white !important;
-            border-radius: 9999px !important;
-            padding: 10px 20px !important;
-            font-weight: 600 !important;
-            font-size: 14px !important;
-            transition: all 0.3s ease !important;
-            border: none !important;
-            box-shadow: 0 2px 4px rgba(245, 101, 101, 0.3) !important;
-        }
-
-        .btn-danger-blue:hover {
-            background: #E53E3E !important;
-            transform: translateY(-2px) !important;
-            box-shadow: 0 4px 8px rgba(245, 101, 101, 0.4) !important;
-        }
-
-        /* Enhanced Chart Container Styles */
-        .chart-container {
-            background: white;
-            border-radius: 12px;
-            padding: 20px;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
-            border: 1px solid #e5e7eb;
-            height: 400px;
-            position: relative;
-            overflow: hidden;
-        }
-
-        .chart-wrapper {
-            width: 100%;
-            height: 100%;
-            position: relative;
-        }
-
-        .chart-title {
-            font-size: 18px;
-            font-weight: 600;
-            color: #374151;
-            margin-bottom: 16px;
-            display: flex;
-            align-items: center;
-        }
-
-        .chart-title i {
-            margin-right: 8px;
-            color: #3C96E1;
-        }
-
-        /* Analytics grid layout improvements */
-        .analytics-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-            gap: 20px;
-            margin-bottom: 20px;
-        }
-
-        /* Chart canvas responsive sizing */
-        .chart-container canvas {
-            max-width: 100% !important;
-            max-height: 100% !important;
-            width: auto !important;
-            height: auto !important;
-        }
-
-        /* Analytics grid layout */
-        .analytics-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-            gap: 24px;
-            margin-bottom: 24px;
-        }
-
-        .analytics-card {
-            background: white;
-            border-radius: 12px;
-            padding: 24px;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
-            border: 1px solid #e5e7eb;
-        }
-
-        .analytics-value {
-            font-size: 32px;
-            font-weight: 700;
-            color: #3C96E1;
-            margin: 8px 0;
-        }
-
-        .analytics-label {
-            font-size: 14px;
-            color: #6b7280;
-            font-weight: 500;
-        }
-
-        .analytics-trend {
-            font-size: 12px;
-            padding: 4px 8px;
-            border-radius: 12px;
-            font-weight: 600;
-        }
-
-        .trend-up {
-            background: #dcfce7;
-            color: #166534;
-        }
-
-        .trend-down {
-            background: #fecaca;
-            color: #991b1b;
-        }
-
-        .trend-neutral {
-            background: #f3f4f6;
-            color: #6b7280;
-        }
         
-        /* Improved user details modal layout */
-        .info-label {
-            font-weight: 700 !important;
-            color: #374151 !important;
-            font-size: 14px !important;
-        }
-        
-        .info-value {
-            font-weight: 500 !important;
-            color: #4b5563 !important;
-            font-size: 14px !important;
-        }
-        
-        /* AJAX Loader */
-        .ajax-loader {
-            display: none;
-            position: fixed;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            background: rgba(255, 255, 255, 0.9);
-            padding: 20px;
-            border-radius: 10px;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
-            z-index: 1000;
-            text-align: center;
-        }
-        
-        .spinner {
-            border: 4px solid #f3f3f3;
-            border-top: 4px solid #3C96E1;
-            border-radius: 50%;
-            width: 40px;
-            height: 40px;
-            animation: spin 1s linear infinite;
-            margin: 0 auto 10px;
-        }
-        
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-        
-        /* User details modal specific styles */
+        /* User details styles */
         .user-details-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
@@ -1256,14 +830,6 @@ $recordsPerPage = 5;
             padding: 15px;
             margin-bottom: 15px;
             border: 1px solid #e2e8f0;
-        }
-        
-        .detail-section h4 {
-            color: #2d3748;
-            font-weight: 600;
-            margin-bottom: 10px;
-            padding-bottom: 8px;
-            border-bottom: 2px solid #e2e8f0;
         }
         
         .detail-item {
@@ -1306,10 +872,109 @@ $recordsPerPage = 5;
             object-fit: contain;
         }
         
+        /* Chart Container Styles */
+        .chart-container {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+            border: 1px solid #e5e7eb;
+            height: 400px;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .chart-wrapper {
+            width: 100%;
+            height: 100%;
+            position: relative;
+        }
+        
+        .chart-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #374151;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+        }
+        
+        .chart-title i {
+            margin-right: 8px;
+            color: #3C96E1;
+        }
+        
+        /* Analytics grid layout improvements */
+        .analytics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        
+        /* Chart canvas responsive sizing */
+        .chart-container canvas {
+            max-width: 100% !important;
+            max-height: 100% !important;
+            width: auto !important;
+            height: auto !important;
+        }
+        
+        .analytics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 24px;
+            margin-bottom: 24px;
+        }
+        
+        .analytics-card {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+            border: 1px solid #e5e7eb;
+        }
+        
+        .analytics-value {
+            font-size: 32px;
+            font-weight: 700;
+            color: #3C96E1;
+            margin: 8px 0;
+        }
+        
+        .analytics-label {
+            font-size: 14px;
+            color: #6b7280;
+            font-weight: 500;
+        }
+        
+        .analytics-trend {
+            font-size: 12px;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-weight: 600;
+        }
+        
+        .trend-up {
+            background: #dcfce7;
+            color: #166534;
+        }
+        
+        .trend-down {
+            background: #fecaca;
+            color: #991b1b;
+        }
+        
+        .trend-neutral {
+            background: #f3f4f6;
+            color: #6b7280;
+        }
+        
         /* Chart responsive sizing */
-        #monthlyActivityChart,
         #patientRegistrationChart,
-        #serviceCompletionChart {
+        #approvalStatusChart,
+        #genderDistributionChart,
+        #ageDistributionChart {
             display: block !important;
             width: 100% !important;
             height: 300px !important;
@@ -1329,30 +994,16 @@ $recordsPerPage = 5;
             height: 300px !important;
             min-height: 300px !important;
         }
-
-        /* Help modal styles */
-        .help-icon {
-            background: none;
-            border: none;
-            cursor: pointer;
-        }
-
-        .help-icon:hover {
-            opacity: 0.8;
-        }
-
-        /* Modal styles for help modal */
-        .modal-container.max-w-4xl {
-            max-width: 800px;
-        }
     </style>
 </head>
 <body class="bg-gray-100">
 
 <!-- AJAX Loader -->
-<div id="ajaxLoader" class="ajax-loader">
-    <div class="spinner"></div>
-    <p>Loading analytics...</p>
+<div id="ajaxLoader" class="fixed inset-0 bg-gray-900 bg-opacity-50 flex items-center justify-center z-50 hidden">
+    <div class="bg-white p-6 rounded-lg shadow-xl">
+        <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+        <p class="text-gray-700">Loading analytics...</p>
+    </div>
 </div>
 
 <div class="container mx-auto px-4 py-6">
@@ -1364,139 +1015,41 @@ $recordsPerPage = 5;
             </svg>
             Admin Dashboard
         </h1>
-        <!-- Help Button -->
-        <button onclick="openHelpModal()" class="help-icon p-2 rounded-full transition">
-            <i class="fa-solid fa-circle-info text-4xl text-blue-600"></i>
-        </button>
     </div>
 
-    <!-- Help/Guide Modal -->
-<div id="helpModal" class="modal-overlay hidden">
-    <div class="modal-container max-w-4xl">
-        <!-- Header -->
-        <div class="modal-header bg-blue-600 text-white p-6">
-            <div class="flex justify-between items-center">
-                <div>
-                    <h3 class="text-2xl font-bold mb-2">Staff Dashboard Guide</h3>
-                    <p class="text-blue-100">Barangay Luz Health Center • User Manual</p>
-                </div>
-                <button onclick="closeHelpModal()" class="text-white hover:text-blue-200 p-2 rounded-full hover:bg-white/10 transition">
-                    <i class="fas fa-times text-xl"></i>
-                </button>
+    <!-- Stats Cards -->
+<div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-6 mb-8">
+    <div class="bg-white p-6 rounded-lg shadow">
+        <div class="flex items-center">
+            <i class="fas fa-user-injured text-2xl text-blue-600 mr-3"></i>
+            <div>
+                <h3 class="text-lg font-semibold text-gray-700">Total Patients</h3>
+                <p class="text-3xl font-bold text-blue-600"><?= $stats['total_patients'] ?></p>
             </div>
         </div>
-        
-        <!-- Body -->
-        <div class="modal-body bg-white">
-            <!-- Welcome Message -->
-            <div class="p-6 border-b border-gray-100">
-                <div class="bg-blue-50 border-l-4 border-blue-500 p-5 rounded">
-                    <div class="flex items-start gap-4">
-                        <i class="fas fa-info-circle text-blue-600 text-xl mt-0.5 flex-shrink-0"></i>
-                        <div>
-                            <p class="text-gray-800"><strong>Welcome to the Community Health Tracker Staff Dashboard!</strong> This guide will help you understand how to use all the features available to you as a staff member.</p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            
-            <!-- Guide Sections -->
-            <div class="p-6 space-y=6">
-                <!-- Account Approvals -->
-                <div class="border border-gray-200 rounded-lg p-6 hover:border-blue-300 transition">
-                    <div class="flex items-center mb-4 gap-4">
-                        <div class="bg-blue-100 text-blue-600 p-3 rounded-lg flex-shrink-0">
-                            <i class="fas fa-user-check text-lg"></i>
-                        </div>
-                        <div>
-                            <h4 class="text-xl font-semibold text-gray-800 mb-1">Account Approvals</h4>
-                            <p class="text-gray-600">Review and approve new patient registrations for system access.</p>
-                        </div>
-                    </div>
-                    <div class="flex flex-wrap gap-2 mt-4">
-                        <span class="bg-blue-50 text-blue-600 px-3 py-1.5 rounded-full text-sm">✓ Verify details</span>
-                        <span class="bg-blue-50 text-blue-600 px-3 py-1.5 rounded-full text-sm">✓ Set access levels</span>
-                        <span class="bg-blue-50 text-blue-600 px-3 py-1.5 rounded-full text-sm">✓ Send notifications</span>
-                    </div>
-                </div>
-                
-                <!-- Analytics Dashboard -->
-                <div class="border border-gray-200 rounded-lg p-6 hover:border-blue-300 transition">
-                    <div class="flex items-center mb-4 gap-4">
-                        <div class="bg-blue-100 text-blue-600 p-3 rounded-lg flex-shrink-0">
-                            <i class="fas fa-chart-bar text-lg"></i>
-                        </div>
-                        <div>
-                            <h4 class="text-xl font-semibold text-gray-800 mb-1">Analytics Dashboard</h4>
-                            <p class="text-gray-600">View comprehensive analytics and insights about patients, appointments, consultations, and system usage.</p>
-                        </div>
-                    </div>
-                    <div class="flex flex-wrap gap-2 mt-4">
-                        <span class="bg-blue-50 text-blue-600 px-3 py-1.5 rounded-full text-sm">✓ Patient statistics</span>
-                        <span class="bg-blue-50 text-blue-600 px-3 py-1.5 rounded-full text-sm">✓ Service trends</span>
-                        <span class="bg-blue-50 text-blue-600 px-3 py-1.5 rounded-full text-sm">✓ Usage reports</span>
-                    </div>
-                </div>
+    </div>
+    
+    <div class="bg-white p-6 rounded-lg shadow">
+        <div class="flex items-center">
+            <i class="fas fa-user-check text-2xl text-green-600 mr-3"></i>
+            <div>
+                <h3 class="text-lg font-semibold text-gray-700">Resident Accounts</h3>
+                <p class="text-3xl font-bold text-green-600"><?= number_format($analytics['approved_count']) ?></p>
             </div>
         </div>
-        
-        <!-- Footer -->
-        <div class="modal-footer bg-gray-50 border-t border-gray-200 p-6">
-            <div class="flex flex-col sm:flex-row justify-between items-center gap-4">
-                <div class="flex items-center gap-2 text-gray-600 text-sm">
-                    <i class="fas fa-question-circle text-blue-500"></i>
-                    <span>Need assistance? Contact support@brgyluzcebucity.com</span>
-                </div>
-                <button onclick="closeHelpModal()" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition w-full sm:w-auto">
-                    Got It, Continue Working
-                </button>
+    </div>
+    
+    <div class="bg-white p-6 rounded-lg shadow">
+        <div class="flex items-center">
+            <i class="fas fa-chart-line text-2xl text-purple-600 mr-3"></i>
+            <div>
+                <h3 class="text-lg font-semibold text-gray-700">Account Rate</h3>
+                <p class="text-3xl font-bold text-purple-600"><?= $analytics['approval_rate'] ?>%</p>
             </div>
         </div>
     </div>
 </div>
 
-    <!-- Stats Cards -->
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-        <div class="bg-white p-6 rounded-lg shadow">
-            <div class="flex items-center">
-                <i class="fas fa-user-injured text-2xl text-blue-600 mr-3"></i>
-                <div>
-                    <h3 class="text-lg font-semibold text-gray-700">Your Patients</h3>
-                    <p class="text-3xl font-bold text-blue-600"><?= $stats['total_patients'] ?></p>
-                </div>
-            </div>
-        </div>
-        
-        <div class="bg-white p-6 rounded-lg shadow">
-            <div class="flex items-center">
-                <i class="fas fa-file-medical text-2xl text-yellow-600 mr-3"></i>
-                <div>
-                    <h3 class="text-lg font-semibold text-gray-700">Consultations</h3>
-                    <p class="text-3xl font-bold text-yellow-600"><?= $stats['consultations'] ?></p>
-                </div>
-            </div>
-        </div>
-        
-        <div class="bg-white p-6 rounded-lg shadow">
-            <div class="flex items-center">
-                <i class="fas fa-calendar-check text-2xl text-green-600 mr-3"></i>
-                <div>
-                    <h3 class="text-lg font-semibold text-gray-700">Services</h3>
-                    <p class="text-3xl font-bold text-green-600"><?= number_format($analytics['appointments_total']) ?></p>
-                </div>
-            </div>
-        </div>
-        
-        <div class="bg-white p-6 rounded-lg shadow">
-            <div class="flex items-center">
-                <i class="fas fa-user-clock text-2xl text-red-600 mr-3"></i>
-                <div>
-                    <h3 class="text-lg font-semibold text-gray-700">Unapproved Users</h3>
-                    <p class="text-3xl font-bold text-red-600"><?= $stats['unapproved_users'] ?></p>
-                </div>
-            </div>
-        </div>
-    </div>
 
     <!-- Navigation Tabs -->
     <div class="mb-6">
@@ -1518,6 +1071,182 @@ $recordsPerPage = 5;
     
     <!-- Tab Contents -->
     <div class="tab-content">
+        <!-- Analytics Dashboard Section -->
+        <div class="<?= $activeTab === 'analytics' ? '' : 'hidden' ?> p-6 bg-white rounded-lg border border-gray-200" id="analytics" role="tabpanel" aria-labelledby="analytics-tab">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-2xl font-semibold mb-6 text-blue-700">Analytics Dashboard</h2>
+                <button onclick="refreshAnalytics()" class="btn-blue flex items-center">
+                    <i class="fas fa-sync-alt mr-2"></i> Refresh Data
+                </button>
+            </div>
+            
+            <!-- Overview Cards -->
+            <div id="analyticsCards" class="analytics-grid mb-8">
+                <div class="analytics-card">
+                    <div class="flex items-center mb-3">
+                        <div class="p-2 bg-blue-100 rounded-lg mr-3">
+                            <i class="fas fa-user-injured text-blue-600 text-xl"></i>
+                        </div>
+                        <h3 class="text-lg font-semibold text-gray-700">Total Patients</h3>
+                    </div>
+                    <div class="analytics-value"><?= number_format($analytics['total_patients']) ?></div>
+                    <div class="analytics-label">Registered in the system</div>
+                    <div class="mt-4 pt-4 border-t border-gray-100">
+                        <div class="flex justify-between items-center">
+                            <span class="text-sm text-gray-500">Approved Patients</span>
+                            <span class="text-sm font-semibold text-green-600"><?= number_format($analytics['approved_count']) ?></span>
+                        </div>
+                        <div class="flex justify-between items-center mt-2">
+                            <span class="text-sm text-gray-500">Pending Approval</span>
+                            <span class="text-sm font-semibold text-yellow-600"><?= number_format($analytics['pending_count']) ?></span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="analytics-card">
+                    <div class="flex items-center mb-3">
+                        <div class="p-2 bg-green-100 rounded-lg mr-3">
+                            <i class="fas fa-chart-line text-green-600 text-xl"></i>
+                        </div>
+                        <h3 class="text-lg font-semibold text-gray-700">Approval Rate</h3>
+                    </div>
+                    <div class="analytics-value"><?= $analytics['approval_rate'] ?>%</div>
+                    <div class="analytics-label">Patient accounts approved</div>
+                    <div class="mt-4 pt-4 border-t border-gray-100">
+                        <div class="flex justify-between items-center">
+                            <span class="text-sm text-gray-500">Total Registered</span>
+                            <span class="text-sm font-semibold text-blue-600"><?= number_format($analytics['total_patients']) ?></span>
+                        </div>
+                        <div class="flex justify-between items-center mt-2">
+                            <span class="text-sm text-gray-500">Approval Success</span>
+                            <span class="text-sm font-semibold text-green-600"><?= number_format($analytics['approved_count']) ?></span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="analytics-card">
+                    <div class="flex items-center mb-3">
+                        <div class="p-2 bg-purple-100 rounded-lg mr-3">
+                            <i class="fas fa-user-plus text-purple-600 text-xl"></i>
+                        </div>
+                        <h3 class="text-lg font-semibold text-gray-700">Monthly Registrations</h3>
+                    </div>
+                    <div class="analytics-value">
+                        <?php 
+                            $lastMonthCount = 0;
+                            if (!empty($analytics['patient_registration_trend'])) {
+                                $lastMonth = end($analytics['patient_registration_trend']);
+                                $lastMonthCount = $lastMonth['count'];
+                            }
+                            echo number_format($lastMonthCount);
+                        ?>
+                    </div>
+                    <div class="analytics-label">New patients last month</div>
+                    <div class="mt-4 pt-4 border-t border-gray-100">
+                        <div class="flex justify-between items-center">
+                            <span class="text-sm text-gray-500">6-month avg</span>
+                            <span class="text-sm font-semibold text-purple-600">
+                                <?php 
+                                    $avg = !empty($analytics['patient_registration_trend']) ? 
+                                        array_sum(array_map(function($item) { return $item['count']; }, $analytics['patient_registration_trend'])) / count($analytics['patient_registration_trend']) : 0;
+                                    echo number_format($avg, 1);
+                                ?>
+                            </span>
+                        </div>
+                        <div class="flex justify-between items-center mt-2">
+                            <span class="text-sm text-gray-500">Peak month</span>
+                            <span class="text-sm font-semibold text-orange-600">
+                                <?php 
+                                    $peak = 0;
+                                    if (!empty($analytics['patient_registration_trend'])) {
+                                        $peak = max(array_map(function($item) { return $item['count']; }, $analytics['patient_registration_trend']));
+                                    }
+                                    echo number_format($peak);
+                                ?>
+                            </span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="analytics-card">
+                    <div class="flex items-center mb-3">
+                        <div class="p-2 bg-orange-100 rounded-lg mr-3">
+                            <i class="fas fa-chart-pie text-orange-600 text-xl"></i>
+                        </div>
+                        <h3 class="text-lg font-semibold text-gray-700">Account Status</h3>
+                    </div>
+                    <div class="analytics-value">
+                        <?= number_format($analytics['pending_count']) ?>
+                    </div>
+                    <div class="analytics-label">Accounts pending review</div>
+                    <div class="mt-4 pt-4 border-t border-gray-100">
+                        <div class="flex justify-between items-center">
+                            <span class="text-sm text-gray-500">Approved</span>
+                            <span class="text-sm font-semibold text-green-600">
+                                <?= number_format($analytics['approved_count']) ?>
+                            </span>
+                        </div>
+                        <div class="flex justify-between items-center mt-2">
+                            <span class="text-sm text-gray-500">Declined/Pending</span>
+                            <span class="text-sm font-semibold text-red-600">
+                                <?= number_format($analytics['pending_declined_count']) ?>
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Charts Grid -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+                <!-- Patient Registration Trend -->
+                <div class="chart-container">
+                    <h3 class="chart-title">
+                        <i class="fas fa-user-plus"></i>
+                        Patient Registration Trend
+                    </h3>
+                    <div class="chart-wrapper">
+                        <canvas id="patientRegistrationChart" height="300"></canvas>
+                    </div>
+                </div>
+                
+                <!-- Approval Status Chart -->
+                <div class="chart-container">
+                    <h3 class="chart-title">
+                        <i class="fas fa-chart-pie"></i>
+                        Account Approval Status
+                    </h3>
+                    <div class="chart-wrapper">
+                        <canvas id="approvalStatusChart" height="300"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Distribution Charts -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <!-- Gender Distribution -->
+                <div class="chart-container">
+                    <h3 class="chart-title">
+                        <i class="fas fa-venus-mars"></i>
+                        Gender Distribution
+                    </h3>
+                    <div class="chart-wrapper">
+                        <canvas id="genderDistributionChart" height="300"></canvas>
+                    </div>
+                </div>
+                
+                <!-- Age Distribution -->
+                <div class="chart-container">
+                    <h3 class="chart-title">
+                        <i class="fas fa-user-friends"></i>
+                        Age Distribution
+                    </h3>
+                    <div class="chart-wrapper">
+                        <canvas id="ageDistributionChart" height="300"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- Account Management Section -->
         <div class="<?= $activeTab === 'account-management' ? '' : 'hidden' ?> p-4 bg-white rounded-lg border border-gray-200" id="account-management" role="tabpanel" aria-labelledby="account-tab">
             <h2 class="text-xl font-semibold mb-4 text-blue-700">Patient Account Approvals</h2>
@@ -1607,174 +1336,6 @@ $recordsPerPage = 5;
                     </div>
                 <?php endif; ?>
             <?php endif; ?>
-        </div>
-
-        <!-- Analytics Dashboard Section -->
-        <div class="<?= $activeTab === 'analytics' ? '' : 'hidden' ?> p-6 bg-white rounded-lg border border-gray-200" id="analytics" role="tabpanel" aria-labelledby="analytics-tab">
-            <div class="flex justify-between items-center mb-6">
-                <h2 class="text-2xl font-semibold mb-6 text-blue-700">Analytics Dashboard</h2>
-                <button onclick="refreshAnalytics()" class="btn-blue flex items-center">
-                    <i class="fas fa-sync-alt mr-2"></i> Refresh Data
-                </button>
-            </div>
-            
-            <!-- Overview Cards -->
-            <div id="analyticsCards" class="analytics-grid mb-8">
-                <div class="analytics-card">
-                    <div class="flex items-center mb-3">
-                        <div class="p-2 bg-blue-100 rounded-lg mr-3">
-                            <i class="fas fa-user-injured text-blue-600 text-xl"></i>
-                        </div>
-                        <h3 class="text-lg font-semibold text-gray-700">Total Patients</h3>
-                    </div>
-                    <div class="analytics-value"><?= number_format($analytics['total_patients']) ?></div>
-                    <div class="analytics-label">Registered in the system</div>
-                    <div class="mt-4 pt-4 border-t border-gray-100">
-                        <div class="flex justify-between items-center">
-                            <span class="text-sm text-gray-500">Approved Patients</span>
-                            <span class="text-sm font-semibold text-green-600"><?= number_format($analytics['approved_patients']) ?></span>
-                        </div>
-                        <div class="flex justify-between items-center mt-2">
-                            <span class="text-sm text-gray-500">Regular Patients</span>
-                            <span class="text-sm font-semibold text-blue-600"><?= number_format($analytics['regular_patients']) ?></span>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="analytics-card">
-                    <div class="flex items-center mb-3">
-                        <div class="p-2 bg-green-100 rounded-lg mr-3">
-                            <i class="fas fa-calendar-check text-green-600 text-xl"></i>
-                        </div>
-                        <h3 class="text-lg font-semibold text-gray-700">Services</h3>
-                    </div>
-                    <div class="analytics-value"><?= number_format($analytics['appointments_total']) ?></div>
-                    <div class="analytics-label">Total services processed</div>
-                    <div class="mt-4 pt-4 border-t border-gray-100">
-                        <div class="flex justify-between items-center">
-                            <span class="text-sm text-gray-500">Completed</span>
-                            <span class="text-sm font-semibold text-green-600">
-                                <?= number_format($analytics['completed_appointments']) ?>
-                            </span>
-                        </div>
-                        <div class="flex justify-between items-center mt-2">
-                            <span class="text-sm text-gray-500">Consultations</span>
-                            <span class="text-sm font-semibold text-blue-600">
-                                <?= number_format($stats['consultations']) ?>
-                            </span>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="analytics-card">
-                    <div class="flex items-center mb-3">
-                        <div class="p-2 bg-purple-100 rounded-lg mr-3">
-                            <i class="fas fa-chart-line text-purple-600 text-xl"></i>
-                        </div>
-                        <h3 class="text-lg font-semibold text-gray-700">Monthly Activity</h3>
-                    </div>
-                    <div class="analytics-value">
-                        <?php 
-                            $lastMonthCount = 0;
-                            if (!empty($analytics['monthly_trend'])) {
-                                $lastMonth = end($analytics['monthly_trend']);
-                                $lastMonthCount = $lastMonth['count'];
-                            }
-                            echo number_format($lastMonthCount);
-                        ?>
-                    </div>
-                    <div class="analytics-label">Services last month</div>
-                    <div class="mt-4 pt-4 border-t border-gray-100">
-                        <div class="flex justify-between items-center">
-                            <span class="text-sm text-gray-500">6-month avg</span>
-                            <span class="text-sm font-semibold text-purple-600">
-                                <?php 
-                                    $avg = !empty($analytics['monthly_trend']) ? 
-                                        array_sum(array_map(function($item) { return $item['count']; }, $analytics['monthly_trend'])) / count($analytics['monthly_trend']) : 0;
-                                    echo number_format($avg, 1);
-                                ?>
-                            </span>
-                        </div>
-                        <div class="flex justify-between items-center mt-2">
-                            <span class="text-sm text-gray-500">Peak month</span>
-                            <span class="text-sm font-semibold text-orange-600">
-                                <?php 
-                                    $peak = 0;
-                                    if (!empty($analytics['monthly_trend'])) {
-                                        $peak = max(array_map(function($item) { return $item['count']; }, $analytics['monthly_trend']));
-                                    }
-                                    echo number_format($peak);
-                                ?>
-                            </span>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="analytics-card">
-                    <div class="flex items-center mb-3">
-                        <div class="p-2 bg-orange-100 rounded-lg mr-3">
-                            <i class="fas fa-tachometer-alt text-orange-600 text-xl"></i>
-                        </div>
-                        <h3 class="text-lg font-semibold text-gray-700">Service Completion</h3>
-                    </div>
-                    <div class="analytics-value">
-                        <?= $analytics['completion_rate'] ?>%
-                    </div>
-                    <div class="analytics-label">Services successfully completed</div>
-                    <div class="mt-4 pt-4 border-t border-gray-100">
-                        <div class="flex justify-between items-center">
-                            <span class="text-sm text-gray-500">Cancellation Rate</span>
-                            <span class="text-sm font-semibold text-red-600">
-                                <?= $analytics['cancellation_rate'] ?>%
-                            </span>
-                        </div>
-                        <div class="flex justify-between items-center mt-2">
-                            <span class="text-sm text-gray-500">No-show Rate</span>
-                            <span class="text-sm font-semibold text-yellow-600">
-                                <?= $analytics['missed_rate'] ?>%
-                            </span>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Charts Grid - REMOVED CONSULTATION TYPE CHART -->
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-                <!-- Monthly Activity Trend -->
-                <div class="chart-container">
-                    <h3 class="chart-title">
-                        <i class="fas fa-chart-line"></i>
-                        Monthly Activity Trend
-                    </h3>
-                    <div class="chart-wrapper">
-                        <canvas id="monthlyActivityChart" height="300"></canvas>
-                    </div>
-                </div>
-                
-                <!-- Patient Registration Trend -->
-                <div class="chart-container">
-                    <h3 class="chart-title">
-                        <i class="fas fa-user-plus"></i>
-                        Patient Registration Trend
-                    </h3>
-                    <div class="chart-wrapper">
-                        <canvas id="patientRegistrationChart" height="300"></canvas>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Service Completion Chart -->
-            <div class="grid grid-cols-1 lg:grid-cols-1 gap-6">
-                <div class="chart-container">
-                    <h3 class="chart-title">
-                        <i class="fas fa-tasks"></i>
-                        Service Performance
-                    </h3>
-                    <div class="chart-wrapper">
-                        <canvas id="serviceCompletionChart" height="300"></canvas>
-                    </div>
-                </div>
-            </div>
         </div>
     </div>
 </div>
@@ -1988,7 +1549,7 @@ $recordsPerPage = 5;
                     </div>
                     <div class="detail-item">
                         <span class="detail-label">Verified At:</span>
-                        <span class="detail-value" id="userVerifiedAt">N/A</span>
+                            <span class="detail-value" id="userVerifiedAt">N/A</span>
                     </div>
                 </div>
 
@@ -2387,15 +1948,6 @@ function closeImageModal() {
     closeModal('imageModal');
 }
 
-// Help modal functions
-function openHelpModal() {
-    openModal('helpModal');
-}
-
-function closeHelpModal() {
-    closeModal('helpModal');
-}
-
 // Tab functionality
 function switchTab(tabId) {
     const url = new URL(window.location);
@@ -2459,7 +2011,7 @@ document.addEventListener('DOMContentLoaded', function() {
 // Close modal when clicking outside
 window.onclick = function(event) {
     const modals = ['userDetailsModal', 'approveConfirmationModal', 'declineModal', 'imageModal', 
-                    'successModal', 'errorModal', 'helpModal'];
+                    'successModal', 'errorModal'];
     
     modals.forEach(modalId => {
         const modal = document.getElementById(modalId);
@@ -2483,78 +2035,30 @@ document.addEventListener('keydown', function(e) {
 // Refresh analytics function
 function refreshAnalytics() {
     const loader = document.getElementById('ajaxLoader');
-    loader.style.display = 'block';
+    loader.style.display = 'flex';
     
     setTimeout(() => {
         location.reload();
     }, 1000);
 }
 
-// Chart initialization - REMOVED CONSULTATION TYPE CHART
+// Chart initialization
 function initializeCharts() {
     console.log('Initializing charts...');
     
     // Check if chart elements exist
-    const monthlyActivityCanvas = document.getElementById('monthlyActivityChart');
     const patientRegistrationCanvas = document.getElementById('patientRegistrationChart');
-    const serviceCompletionCanvas = document.getElementById('serviceCompletionChart');
+    const approvalStatusCanvas = document.getElementById('approvalStatusChart');
+    const genderDistributionCanvas = document.getElementById('genderDistributionChart');
+    const ageDistributionCanvas = document.getElementById('ageDistributionChart');
     
     // Destroy existing charts if they exist
-    Chart.getChart(monthlyActivityCanvas)?.destroy();
     Chart.getChart(patientRegistrationCanvas)?.destroy();
-    Chart.getChart(serviceCompletionCanvas)?.destroy();
+    Chart.getChart(approvalStatusCanvas)?.destroy();
+    Chart.getChart(genderDistributionCanvas)?.destroy();
+    Chart.getChart(ageDistributionCanvas)?.destroy();
     
-    // 1. Monthly Activity Trend Chart
-    try {
-        const monthlyActivityCtx = monthlyActivityCanvas.getContext('2d');
-        const monthlyData = <?= json_encode($analytics['monthly_trend']) ?>;
-        const monthlyLabels = monthlyData.map(item => {
-            const date = new Date(item.month + '-01');
-            return date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
-        });
-        const monthlyValues = monthlyData.map(item => item.count);
-        
-        const monthlyActivityChart = new Chart(monthlyActivityCtx, {
-            type: 'line',
-            data: {
-                labels: monthlyLabels,
-                datasets: [{
-                    label: 'Services',
-                    data: monthlyValues,
-                    borderColor: '#3B82F6',
-                    backgroundColor: 'rgba(59, 130, 246, 0.05)',
-                    borderWidth: 3,
-                    fill: true,
-                    tension: 0.4,
-                    pointBackgroundColor: '#3B82F6',
-                    pointBorderColor: '#fff',
-                    pointBorderWidth: 2,
-                    pointRadius: 5
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: { legend: { display: false } },
-                scales: {
-                    y: {
-                        beginAtZero: true,
-                        grid: { drawBorder: false, color: 'rgba(229, 231, 235, 0.5)' },
-                        ticks: { font: { size: 11 } }
-                    },
-                    x: {
-                        grid: { display: false },
-                        ticks: { font: { size: 11 } }
-                    }
-                }
-            }
-        });
-        console.log('Monthly Activity Chart initialized');
-    } catch (error) {
-        console.error('Error initializing monthly activity chart:', error);
-    }
-    
-    // 2. Patient Registration Trend Chart
+    // 1. Patient Registration Trend Chart
     try {
         const patientRegCtx = patientRegistrationCanvas.getContext('2d');
         const patientData = <?= json_encode($analytics['patient_registration_trend']) ?>;
@@ -2604,64 +2108,154 @@ function initializeCharts() {
         console.error('Error initializing patient registration chart:', error);
     }
     
-    // 3. Service Completion Chart
+    // 2. Approval Status Chart
     try {
-        const serviceCompletionCtx = serviceCompletionCanvas.getContext('2d');
-        const totalServices = <?= $analytics['appointments_total'] ?>;
-        const completedServices = <?= $analytics['completed_appointments'] ?>;
-        const completionRate = <?= $analytics['completion_rate'] ?>;
+        const approvalStatusCtx = approvalStatusCanvas.getContext('2d');
+        const approvedCount = <?= $analytics['approved_count'] ?>;
+        const pendingCount = <?= $analytics['pending_count'] ?>;
+        const declinedCount = <?= $analytics['pending_declined_count'] - $analytics['pending_count'] ?>;
         
-        // Create service completion chart
-        const serviceCompletionChart = new Chart(serviceCompletionCtx, {
+        const approvalStatusChart = new Chart(approvalStatusCtx, {
             type: 'doughnut',
             data: {
-                labels: ['Completed', 'Remaining'],
+                labels: ['Approved', 'Pending', 'Declined'],
                 datasets: [{
-                    data: [completionRate, 100 - completionRate],
-                    backgroundColor: ['#10B981', '#E5E7EB'],
-                    borderWidth: 0,
-                    hoverBackgroundColor: ['#059669', '#D1D5DB']
+                    data: [approvedCount, pendingCount, declinedCount],
+                    backgroundColor: ['#10B981', '#FBBF24', '#EF4444'],
+                    borderWidth: 1,
+                    borderColor: '#ffffff',
+                    hoverBackgroundColor: ['#059669', '#F59E0B', '#DC2626']
                 }]
             },
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
-                cutout: '75%',
                 plugins: {
-                    legend: { display: false },
-                    tooltip: { enabled: false }
+                    legend: {
+                        position: 'bottom',
+                        labels: {
+                            padding: 20,
+                            usePointStyle: true,
+                            font: {
+                                size: 12
+                            }
+                        }
+                    }
+                },
+                cutout: '60%'
+            }
+        });
+        console.log('Approval Status Chart initialized');
+    } catch (error) {
+        console.error('Error initializing approval status chart:', error);
+    }
+    
+    // 3. Gender Distribution Chart
+    try {
+        const genderDistributionCtx = genderDistributionCanvas.getContext('2d');
+        const genderData = <?= json_encode($analytics['gender_distribution']) ?>;
+        
+        const genderLabels = genderData.map(item => item.gender || 'Unknown');
+        const genderValues = genderData.map(item => item.count);
+        const genderColors = genderLabels.map(label => {
+            if (label.toLowerCase() === 'male') return '#3B82F6';
+            if (label.toLowerCase() === 'female') return '#EC4899';
+            return '#6B7280';
+        });
+        
+        const genderDistributionChart = new Chart(genderDistributionCtx, {
+            type: 'pie',
+            data: {
+                labels: genderLabels,
+                datasets: [{
+                    data: genderValues,
+                    backgroundColor: genderColors,
+                    borderWidth: 1,
+                    borderColor: '#ffffff',
+                    hoverBackgroundColor: genderColors.map(color => color + 'CC')
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                        labels: {
+                            padding: 20,
+                            usePointStyle: true,
+                            font: {
+                                size: 12
+                            }
+                        }
+                    }
                 }
             }
         });
-        
-        // Add completion rate text overlay
-        const chartContainer = serviceCompletionCanvas.parentElement;
-        chartContainer.style.position = 'relative';
-        
-        // Remove existing text overlay if it exists
-        const existingOverlay = chartContainer.querySelector('.chart-overlay');
-        if (existingOverlay) {
-            existingOverlay.remove();
-        }
-        
-        // Create new overlay
-        const overlay = document.createElement('div');
-        overlay.className = 'chart-overlay';
-        overlay.style.position = 'absolute';
-        overlay.style.top = '50%';
-        overlay.style.left = '50%';
-        overlay.style.transform = 'translate(-50%, -50%)';
-        overlay.style.textAlign = 'center';
-        overlay.innerHTML = `
-            <div class="text-3xl font-bold text-gray-900">${completionRate}%</div>
-            <div class="text-sm text-gray-600 mt-1">Completion Rate</div>
-            <div class="text-xs text-gray-400 mt-2">${completedServices} of ${totalServices}</div>
-        `;
-        chartContainer.appendChild(overlay);
-        
-        console.log('Service Completion Chart initialized');
+        console.log('Gender Distribution Chart initialized');
     } catch (error) {
-        console.error('Error initializing service completion chart:', error);
+        console.error('Error initializing gender distribution chart:', error);
+    }
+    
+    // 4. Age Distribution Chart
+    try {
+        const ageDistributionCtx = ageDistributionCanvas.getContext('2d');
+        const ageData = <?= json_encode($analytics['age_distribution']) ?>;
+        
+        const ageLabels = ageData.map(item => item.age_group);
+        const ageValues = ageData.map(item => item.count);
+        const ageColors = ['#60A5FA', '#3B82F6', '#2563EB', '#1D4ED8', '#1E40AF'];
+        
+        const ageDistributionChart = new Chart(ageDistributionCtx, {
+            type: 'bar',
+            data: {
+                labels: ageLabels,
+                datasets: [{
+                    label: 'Patients',
+                    data: ageValues,
+                    backgroundColor: ageColors,
+                    borderColor: ageColors.map(color => color + 'CC'),
+                    borderWidth: 1,
+                    borderRadius: 6
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        display: false
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        grid: {
+                            drawBorder: false,
+                            color: 'rgba(229, 231, 235, 0.5)'
+                        },
+                        ticks: {
+                            font: {
+                                size: 11
+                            }
+                        }
+                    },
+                    x: {
+                        grid: {
+                            display: false
+                        },
+                        ticks: {
+                            font: {
+                                size: 11
+                            }
+                        }
+                    }
+                }
+            }
+        });
+        console.log('Age Distribution Chart initialized');
+    } catch (error) {
+        console.error('Error initializing age distribution chart:', error);
     }
 }
 </script>
