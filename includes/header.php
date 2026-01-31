@@ -123,7 +123,7 @@ body,
     transform: translateY(-1px);
 }
 
-.nav-tab.active::after {
+/* .nav-tab.active::after {
     content: '';
     position: absolute;
     bottom: -6px;
@@ -133,7 +133,7 @@ body,
     height: 2px;
     background: white;
     border-radius: 2px;
-}
+} */
 
 .nav-tab:hover:not(.active) {
     background: rgba(255, 255, 255, 0.1);
@@ -327,16 +327,12 @@ body,
 }
 
 .barangay-text {
-    font-size: 0.875rem;
-    font-weight: 500;
     line-height: 1;
     margin-bottom: 2px;
     opacity: 0.9;
 }
 
 .main-title {
-    font-size: 1.5rem;
-    font-weight: bold;
     line-height: 1.2;
 }
 
@@ -660,10 +656,6 @@ body,
         height: 50px;
     }
 
-    .barangay-text {
-        font-size: 0.8rem;
-    }
-
     .main-title {
         font-size: 1.25rem;
     }
@@ -902,16 +894,25 @@ body,
         <?php elseif (isUser()): ?>
             <!-- User Header -->
             <nav class="bg-[#3C96E1] text-white shadow-lg sticky top-0 z-50">
-                <div class="container mx-auto px-4 py-3 flex justify-between items-center">
+                <div class=" px-16 py-8 flex justify-between items-center">
                     <div class="flex items-center space-x-2">
                         <!-- Barangay Toong Logo -->
                         <img src="../asssets/images/Luz.jpg" alt="Barangay Luz Logo"
                             class="logo-image">
                         <!-- Updated Header Title with Barangay Toong text -->
                         <div class="header-title-container">
-                            <div class="barangay-text">Barangay Luz</div>
-                            <a href="/community-health-tracker/" class="main-title">Resident Consultation Portal</a>
+                            <div class="barangay-text text-lg font-semibold">Barangay Luz</div>
+                            <a href="/community-health-tracker/" class="main-title font-light">Resident Consultation Portal</a>
                         </div>
+                    </div>
+
+                    <!-- NAV CONTENT -->
+                    <div>
+                        <ul class="flex flex-row space-x-12 font-light">
+                            <li class="hover:text-[#F0F0F0] cursor-pointer">Terms & Conditions</li>
+                            <li class="hover:text-[#F0F0F0] cursor-pointer">Contact Us</li>
+                            <li class="hover:text-[#F0F0F0] cursor-pointer">Frequently Asked Questions</li>
+                        </ul>
                     </div>
 
                     <div class="flex items-center space-x-10">
@@ -926,14 +927,14 @@ body,
                             <span class="font-medium"><?= htmlspecialchars($_SESSION['user']['full_name']) ?></span>
                         </div>
                         <!-- Enhanced Logout Button - UPDATED FOR FULL ROUND -->
-                        <button type="button" onclick="showLogoutModal('user')" class="logout-btn bg-white text-[#3C96E1] hover:bg-[#2B7CC9] hover:text-white">
-                            <span>Logout</span>
+                        <button type="button" onclick="showLogoutModal('user')" class="logout-btn  text-[#FFFFFF] hover:bg-[#2B7CC9] hover:text-white">
+                            <span>Signout</span>
                         </button>
                     </div>
                 </div>
 
                 <div class="bg-[#2B7CC9] py-3">
-                    <div class="container mx-auto px-4 flex items-center justify-between user-nav-container">
+                    <div class=" px-16 flex items-center justify-between">
                         <div class="nav-tab-container">
                             <div class="nav-connection">
                                 <a href="dashboard.php"

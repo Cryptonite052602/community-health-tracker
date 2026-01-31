@@ -114,7 +114,7 @@ $totalPatients = count($allPatientInfo);
 </head>
 <body class="bg-gray-50 min-h-screen font-sans">
     <!-- Top Navigation -->
-    <nav class="bg-white shadow-sm border-b">
+    <!-- <nav class="bg-white shadow-sm border-b">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="flex justify-between h-16">
                 <div class="flex items-center">
@@ -134,13 +134,18 @@ $totalPatients = count($allPatientInfo);
                 </div>
             </div>
         </div>
-    </nav>
+    </nav> -->
 
-    <div class="max-w-7xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
+    <div class="px-4 py-8 sm:px-6 -mt-24">
         <!-- Header Section -->
-        <div class="mb-8">
-            <h1 class="text-3xl font-bold text-gray-900 mb-2">Health Profile</h1>
-            <p class="text-gray-600">View and manage your medical records</p>
+        <div class="mb-8 flex flex-row items-center space-x-4 border-b pb-4">
+            <div>
+                <svg width="18" height="32" viewBox="0 0 18 32" fill="none" xmlns="http://www.w3.org/2000/svg"> <path d="M14.5855 0.523023C15.2829 -0.174341 16.4133 -0.174341 17.1106 0.523023C17.808 1.22039 17.808 2.35077 17.1106 3.04814L4.31069 15.8481L17.1106 28.648C17.808 29.3454 17.808 30.4758 17.1106 31.1731C16.4133 31.8705 15.2829 31.8705 14.5855 31.1731L0.523023 17.1106C-0.174341 16.4133 -0.174341 15.2829 0.523023 14.5855L14.5855 0.523023Z" fill="black"/> </svg>
+            </div>
+            <div>
+                <h1 class="text-2xl font-bold text-gray-900 mb-1">Health Profile</h1>
+                <p class="text-[#B8B8B8]">View and manage your medical records</p>
+           </div>
         </div>
 
         <?php if (!empty($error)): ?>
@@ -153,7 +158,7 @@ $totalPatients = count($allPatientInfo);
         <?php endif; ?>
 
         <!-- Stats Cards -->
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+        <!-- <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
             <div class="bg-white rounded-lg shadow p-5 hover:shadow-md transition-shadow">
                 <div class="flex items-center">
                     <div class="w-12 h-12 rounded-lg bg-blue-50 flex items-center justify-center mr-4">
@@ -189,21 +194,21 @@ $totalPatients = count($allPatientInfo);
                     </div>
                 </div>
             </div>
-        </div>
+        </div> -->
 
         <!-- Main Content Tabs -->
         <div class="bg-white rounded-lg shadow mb-8">
             <!-- Tab Headers -->
             <div class="border-b">
                 <div class="flex overflow-x-auto">
-                    <button class="tab-header active px-6 py-4 font-bold text-blue-600 border-b-2 border-blue-600" data-tab="consultations">
-                        <i class="fas fa-calendar-check icon-base mr-2"></i> Consultations
+                    <button class="tab-header active px-6 py-4 font-bold text-blue-600" data-tab="consultations">
+                        <i class="fas fa-notes-medical icon-base mr-2"></i> Doctor's Note
                     </button>
                     <button class="tab-header px-6 py-4 font-bold text-gray-600 hover:text-gray-900" data-tab="patients">
-                        <i class="fas fa-user-injured icon-base mr-2"></i> Patients
+                        <i class="fas fa-user-injured icon-base mr-2"></i> Personal Records
                     </button>
                     <button class="tab-header px-6 py-4 font-bold text-gray-600 hover:text-gray-900" data-tab="medical">
-                        <i class="fas fa-heart icon-base mr-2"></i> Medical Info
+                        <i class="fas fa-heart icon-base mr-2"></i> Health Records
                     </button>
                 </div>
             </div>
@@ -217,7 +222,7 @@ $totalPatients = count($allPatientInfo);
                             <div class="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-4">
                                 <i class="fas fa-user-md text-gray-400 icon-3xl"></i>
                             </div>
-                            <h3 class="text-lg font-bold text-gray-900 mb-2">No Patients Linked</h3>
+                            <h3 class="text-lg font-bold text-gray-900 mb-2">No Doctor's Note</h3>
                             <p class="text-gray-500 mb-6">Your account is not linked to any patient records.</p>
                             <button class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-bold" onclick="alert('Please contact the health center to link your account.')">
                                 Contact Health Center
@@ -325,7 +330,7 @@ $totalPatients = count($allPatientInfo);
                             <div class="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-4">
                                 <i class="fas fa-user-times text-gray-400 icon-3xl"></i>
                             </div>
-                            <h3 class="text-lg font-bold text-gray-900 mb-2">No Patient Profiles</h3>
+                            <h3 class="text-lg font-bold text-gray-900 mb-2">No Personal Records</h3>
                             <p class="text-gray-500">Contact the health center to link patient records.</p>
                         </div>
                     <?php else: ?>
@@ -417,7 +422,7 @@ $totalPatients = count($allPatientInfo);
                             <div class="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-4">
                                 <i class="fas fa-heartbeat text-gray-400 icon-3xl"></i>
                             </div>
-                            <h3 class="text-lg font-bold text-gray-900 mb-2">No Medical Information</h3>
+                            <h3 class="text-lg font-bold text-gray-900 mb-2">No Health Records</h3>
                             <p class="text-gray-500">No patient records linked.</p>
                         </div>
                     <?php else: 
@@ -599,14 +604,14 @@ $totalPatients = count($allPatientInfo);
     </div>
 
     <!-- Footer -->
-    <footer class="mt-12 border-t bg-white">
+    <!-- <footer class="mt-12 border-t bg-white">
         <div class="max-w-7xl mx-auto px-4 py-6 sm:px-6 lg:px-8">
             <div class="text-center text-gray-500 text-sm">
                 <p class="font-bold">Barangay Luz Health Center • Patient Portal</p>
                 <p class="mt-1">© <?php echo date('Y'); ?> All rights reserved</p>
             </div>
         </div>
-    </footer>
+    </footer> -->
 
     <script>
         // Tab switching
