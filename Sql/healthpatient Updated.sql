@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1
--- Generation Time: Jan 27, 2026 at 04:01 PM
+-- Generation Time: Jan 31, 2026 at 09:06 AM
 -- Server version: 10.4.32-MariaDB
 -- PHP Version: 8.2.12
 
@@ -109,10 +109,20 @@ CREATE TABLE `consultation_notes` (
   `note` text NOT NULL,
   `consultation_date` date NOT NULL,
   `next_consultation_date` date DEFAULT NULL,
+  `doctor_name` varchar(255) DEFAULT NULL,
   `created_by` int(11) NOT NULL,
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
   `updated_at` timestamp NULL DEFAULT NULL ON UPDATE current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Dumping data for table `consultation_notes`
+--
+
+INSERT INTO `consultation_notes` (`id`, `patient_id`, `note`, `consultation_date`, `next_consultation_date`, `doctor_name`, `created_by`, `created_at`, `updated_at`) VALUES
+(33, 214, 'Hello sir', '2026-01-29', '2026-02-07', 'Dr. Jose Mari Chan', 1, '2026-01-29 03:46:15', NULL),
+(34, 214, 'Hello sir', '2026-01-29', '2026-02-07', 'Dr. Jessie Sanchez', 1, '2026-01-29 05:03:20', NULL),
+(35, 213, 'Hello', '2026-01-31', '2026-02-07', 'Dr. Leandro Labos', 1, '2026-01-31 08:04:16', NULL);
 
 -- --------------------------------------------------------
 
@@ -172,24 +182,15 @@ CREATE TABLE `existing_info_patients` (
   `chronic_conditions` text DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
--- --------------------------------------------------------
-
 --
--- Table structure for table `patient_consultation_notes`
+-- Dumping data for table `existing_info_patients`
 --
 
-CREATE TABLE `patient_consultation_notes` (
-  `id` int(11) NOT NULL,
-  `patient_id` int(11) NOT NULL,
-  `staff_id` int(11) NOT NULL,
-  `consultation_date` datetime DEFAULT current_timestamp(),
-  `note_type` enum('General','Follow-up','Medication','Diagnosis','Referral','Other') DEFAULT 'General',
-  `notes` text NOT NULL,
-  `next_checkup_date` date DEFAULT NULL,
-  `status` enum('Active','Resolved','Pending','Cancelled') DEFAULT 'Active',
-  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
-  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+INSERT INTO `existing_info_patients` (`id`, `patient_id`, `gender`, `height`, `weight`, `blood_type`, `allergies`, `medical_history`, `current_medications`, `family_history`, `updated_at`, `temperature`, `blood_pressure`, `immunization_record`, `chronic_conditions`) VALUES
+(172, 210, 'Female', 45.00, 45.00, 'A+', 'None of the Above', 'None of the Above', 'None of the Above', 'None of the Above', '2026-01-28 21:27:04', 45.00, '120/80', 'None of the Above', 'None of the Above'),
+(173, 211, 'Male', 45.00, 45.00, 'A+', 'Oily Foods', 'Miller Hospital Dental Check-up', 'Amoxicillin, Mefenamic and Bioflu', 'None of Above', NULL, 45.00, '120/80', 'None of Above', 'None of Above'),
+(175, 213, 'Male', 45.00, 45.00, 'A+', 'Hello everyone goodmorning', 'Hello everyone goodmorning', 'Hello everyone goodmorning', 'Hello everyone goodmorning', '2026-01-29 03:33:35', 45.00, '120/80', 'Hello everyone goodmorning', 'Hello everyone goodmorning'),
+(176, 214, 'Male', 45.00, 45.00, 'A+', 'None', 'None', 'None', 'None', NULL, 45.00, '120/80', 'None', 'None');
 
 -- --------------------------------------------------------
 
@@ -332,6 +333,16 @@ CREATE TABLE `sitio1_patients` (
   `patient_record_uid` varchar(50) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
+--
+-- Dumping data for table `sitio1_patients`
+--
+
+INSERT INTO `sitio1_patients` (`id`, `user_id`, `phic_no`, `bhw_assigned`, `family_no`, `fourps_member`, `full_name`, `date_of_birth`, `age`, `address`, `sitio`, `disease`, `contact`, `last_checkup`, `medical_history`, `added_by`, `created_at`, `deleted_at`, `restored_at`, `gender`, `updated_at`, `consultation_type`, `civil_status`, `occupation`, `consent_given`, `consent_date`, `patient_record_uid`) VALUES
+(210, NULL, '524323', 'Jinky Figuracion taga Gawi', '09206001470', 'No', 'Archiel R. Cabanag', '2002-05-26', 23, 'Labangon Cebu City', 'Carbon', NULL, '09816497664', '2026-01-21', NULL, 1, '2026-01-28 12:42:13', NULL, NULL, 'Female', '2026-01-28 21:27:04', 'onsite', 'Single', 'Student Teacher', 1, '2026-01-28 20:42:13', 'PAT-20260128-ARC-4499'),
+(211, NULL, '524323', 'Lucencya Araraw', '09206001470', 'Yes', 'Jerecho Latosa', '2002-05-31', 23, 'Duljo Fatima, Cebu City', 'Panganiban', NULL, '09816497664', '2025-03-01', NULL, 1, '2026-01-28 21:57:39', NULL, NULL, 'Male', '2026-01-29 03:14:10', 'onsite', 'Married', 'Student Teacher', 1, '2026-01-29 05:57:39', 'PAT-20260129-JER-6903'),
+(213, 186, '524323', 'Jinky Figuracion taga Gawi', '09206001470', 'Yes', 'Russel Evan Loquinario', '2002-05-21', 23, 'Labangon Cebu City', 'Luz Proper', NULL, '09206001470', '2026-01-20', NULL, 1, '2026-01-29 00:31:44', NULL, NULL, 'Male', '2026-01-31 07:58:34', 'onsite', 'Single', 'Student Teacher', 1, '2026-01-29 08:31:44', 'PAT-20260131-RUS-5173'),
+(214, 185, '524323', 'Archiel R. Cabanag', '09206001470', 'Yes', 'Jaycar Otida', '2002-11-30', 23, 'Barangay Luz, Cebu City Philippines', 'Panganiban', NULL, '09816497664', '2026-01-28', NULL, 1, '2026-01-29 03:40:51', NULL, NULL, 'Male', '2026-01-29 03:45:38', 'onsite', 'Single', 'Student', 1, '2026-01-29 11:40:51', 'PAT-20260129-JAY-2133');
+
 -- --------------------------------------------------------
 
 --
@@ -408,11 +419,8 @@ CREATE TABLE `sitio1_users` (
 --
 
 INSERT INTO `sitio1_users` (`id`, `username`, `password`, `email`, `full_name`, `gender`, `age`, `date_of_birth`, `address`, `sitio`, `contact`, `civil_status`, `occupation`, `approved`, `approved_by`, `unique_number`, `created_at`, `last_login`, `status`, `role`, `specialization`, `license_number`, `updated_at`, `verification_method`, `id_image_path`, `profile_image`, `verification_notes`, `verification_consent`, `id_verified`, `verified_at`, `account_linked`, `patient_record_id`, `patient_record_uid`) VALUES
-(178, 'Warren', '$2y$10$KHf5CYe6kk6jW2RZkY10DuEZ.EBZVOPUcW0kT743i8sb/TAc3aQmm', 'warrenmiras@gmail.com', 'Warren Miguel Miras', 'male', 0, '2026-01-19', NULL, 'Panganiban', '09206001470', NULL, NULL, 1, NULL, 'RESPAN202601444', '2026-01-25 08:42:08', NULL, 'approved', 'patient', NULL, NULL, '2026-01-27 13:27:29', 'manual_verification', NULL, NULL, NULL, 0, 1, '2026-01-25 08:42:08', 0, NULL, 'PAT-20260127-WAR-9681'),
-(179, 'Russel', '$2y$10$jDlPRD/2QG.XLFTpG16qZOOsFfSfB2hwV40unXoVrIz8b.2dJSSQy', 'russel@gmail.com', 'Russel Evan Loquinario', 'male', 0, '2026-01-07', NULL, 'Panganiban', '09206001470', NULL, NULL, 1, NULL, 'RESPAN202601713', '2026-01-25 09:27:16', NULL, 'approved', 'patient', NULL, NULL, '2026-01-26 03:00:55', 'manual_verification', NULL, NULL, NULL, 0, 1, '2026-01-25 09:27:16', 0, NULL, 'PAT-20260126-RUS-6055'),
-(180, 'Archiel', '$2y$10$4NS8QMOW4t74kq1S7XgSlOsCSMBHNu06h6.A78bkh1fVVYOk4YmIO', 'cabanagarchielrosel@gmail.com', 'Archiel R. Cabanag', 'male', 0, '2026-01-13', NULL, 'Carbon', '09816497664', NULL, NULL, 1, NULL, 'RESCAR202601055', '2026-01-26 05:56:51', NULL, 'approved', 'patient', NULL, NULL, '2026-01-27 14:19:19', 'manual_verification', NULL, NULL, NULL, 0, 1, '2026-01-26 05:56:51', 0, NULL, 'PAT-20260127-ARC-5015'),
-(181, 'Jerecho', '$2y$10$khi1U3O3HGc10VYhgNpBnOiKNKKtrCU/zlX8GYH.tLH6eoY3WgZLa', 'jerecholatosa@gmail.com', 'Jerecho Latosa', 'male', 0, '2026-01-20', NULL, 'Luz Heights', '09816497664', NULL, NULL, 1, NULL, 'RESLUZ202601021', '2026-01-26 10:37:28', NULL, 'approved', 'patient', NULL, NULL, '2026-01-26 11:41:29', 'manual_verification', NULL, NULL, NULL, 0, 1, '2026-01-26 10:37:28', 0, NULL, 'PAT-20260126-JER-7155'),
-(183, 'Jaycar', '$2y$10$r4yMdBPW9zWE01pGpukpWe6.qlH3nVE0o76oL4/gAVB.sU97F/Lqm', 'jaycarotida@gmail.com', 'Jaycar Otida', 'male', 0, '2026-01-21', NULL, 'Panganiban', '09206001470', NULL, NULL, 1, NULL, 'RESPAN202601406', '2026-01-26 22:16:48', NULL, 'approved', 'patient', NULL, NULL, '2026-01-26 22:55:51', 'manual_verification', NULL, NULL, NULL, 0, 1, '2026-01-26 22:16:48', 0, NULL, 'PAT-20260127-JAY-8404');
+(185, 'Jaycar', '$2y$10$dodwYp9EUxNnTU3YWTG30uzFNa9rUHLo3rDkVTv.P3/LBZ6Bz3jam', 'jaycarotida@gmail.com', 'Jaycar Otida', 'male', 0, '2025-12-28', NULL, 'Panganiban', '09206001470', NULL, NULL, 1, NULL, 'RESPAN202601613', '2026-01-29 03:45:00', NULL, 'approved', 'patient', NULL, NULL, '2026-01-29 03:45:38', 'manual_verification', NULL, NULL, NULL, 0, 1, '2026-01-29 03:45:00', 0, NULL, 'PAT-20260129-JAY-2133'),
+(186, 'Russel', '$2y$10$z3Ih.DKwsdxVg5hbEsixLO/9pKRjYDurh5WVrwcGM0iyT0nKcEnQW', 'russelloki@gmai.com', 'Russel Evan Loquinario', 'male', 0, '2026-01-22', NULL, 'Panganiban', '09816497664', NULL, NULL, 1, NULL, 'RESPAN202601519', '2026-01-31 07:58:04', NULL, 'approved', 'patient', NULL, NULL, '2026-01-31 07:58:34', 'manual_verification', NULL, NULL, NULL, 0, 1, '2026-01-31 07:58:04', 0, NULL, 'PAT-20260131-RUS-5173');
 
 -- --------------------------------------------------------
 
@@ -532,13 +540,6 @@ ALTER TABLE `deleted_patients`
 ALTER TABLE `existing_info_patients`
   ADD PRIMARY KEY (`id`),
   ADD KEY `patient_id` (`patient_id`);
-
---
--- Indexes for table `patient_consultation_notes`
---
-ALTER TABLE `patient_consultation_notes`
-  ADD PRIMARY KEY (`id`),
-  ADD KEY `idx_patient_consultation_notes` (`patient_id`,`consultation_date`);
 
 --
 -- Indexes for table `patient_visits`
@@ -661,7 +662,7 @@ ALTER TABLE `audit_logs`
 -- AUTO_INCREMENT for table `consultation_notes`
 --
 ALTER TABLE `consultation_notes`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=23;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=36;
 
 --
 -- AUTO_INCREMENT for table `deleted_patients`
@@ -673,13 +674,7 @@ ALTER TABLE `deleted_patients`
 -- AUTO_INCREMENT for table `existing_info_patients`
 --
 ALTER TABLE `existing_info_patients`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=171;
-
---
--- AUTO_INCREMENT for table `patient_consultation_notes`
---
-ALTER TABLE `patient_consultation_notes`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=177;
 
 --
 -- AUTO_INCREMENT for table `patient_visits`
@@ -715,7 +710,7 @@ ALTER TABLE `sitio1_consultations`
 -- AUTO_INCREMENT for table `sitio1_patients`
 --
 ALTER TABLE `sitio1_patients`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=209;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=215;
 
 --
 -- AUTO_INCREMENT for table `sitio1_staff`
@@ -727,7 +722,7 @@ ALTER TABLE `sitio1_staff`
 -- AUTO_INCREMENT for table `sitio1_users`
 --
 ALTER TABLE `sitio1_users`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=184;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=187;
 
 --
 -- AUTO_INCREMENT for table `staff_documents`
